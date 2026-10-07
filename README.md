@@ -1,6 +1,6 @@
 # PM2M
 
-<img width="400" alt="Снимок" src="https://github.com/user-attachments/assets/c29bef13-fc1e-4363-81da-352b08412256" /><img width="400" alt="Снимок3" src="https://github.com/user-attachments/assets/8993dbe8-8d0d-4c4f-828c-489c3f18a514" />
+<img width="400" alt="Снимок" src="https://github.com/user-attachments/assets/c29bef13-fc1e-4363-81da-352b08412256" /> <img width="400" alt="Снимок3" src="https://github.com/user-attachments/assets/8993dbe8-8d0d-4c4f-828c-489c3f18a514" /> 
 <img width="400" alt="Снимок2" src="https://github.com/user-attachments/assets/c0e14115-8a13-4de8-b47f-fcfaf27bc5ba" />
 
 
