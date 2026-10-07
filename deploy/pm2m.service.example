@@ -1,0 +1,15 @@
+[Unit]
+Description=PM2M web manager
+After=network.target
+
+[Service]
+Type=simple
+User=deploy
+WorkingDirectory=/opt/pm2m
+ExecStart=/usr/bin/node --env-file=/opt/pm2m/.env /opt/pm2m/server.js
+Restart=on-failure
+RestartSec=5
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

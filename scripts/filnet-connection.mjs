@@ -1,0 +1,10 @@
+import fs from 'node:fs/promises';
+import { createDecipheriv } from 'node:crypto';
+import { execute } from '../lib/ssh.js';
+const state = JSON.parse(await fs.readFile(new URL('../data/demo/settings.json',import.meta.url)));
+const profile=state.servers.find(s=>s.name==='Filnet');
+const key=await fs.readFile(new URL('../data/demo/secret.key',import.meta.url));
+const [iv,tag,data]=profile.secret.split('.').map(v=>Buffer.from(v,'base64'));
+const cipher=createDecipheriv('aes-256-gcm',key,iv);cipher.setAuthTag(tag);
+export const config={...profile,password:Buffer.concat([cipher.update(data),cipher.final()]).toString()};
+if(process.argv[2]==='inspect') console.log(await execute(config,"ls -d /root/.nvm/versions/node/*/bin/node; readlink -f /Projects/pm2m; test -f /Projects/pm2m/server.js && echo PROJECT_OK; PATH=/root/.nvm/versions/node/v22.16.0/bin:$PATH /root/.nvm/versions/node/v22.16.0/bin/node /root/.nvm/versions/node/v10.13.0/lib/node_modules/pm2/bin/pm2 jlist | /root/.nvm/versions/node/v22.16.0/bin/node -e \"let s='';process.stdin.on('data',x=>s+=x);process.stdin.on('end',()=>console.log(JSON.stringify(JSON.parse(s).map(p=>({id:p.pm_id,name:p.name,status:p.pm2_env.status,cwd:p.pm2_env.pm_cwd,script:p.pm2_env.pm_exec_path,node:p.pm2_env.exec_interpreter})))));\""));

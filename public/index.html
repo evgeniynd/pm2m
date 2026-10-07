@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="ru">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>PM2M — управление процессами</title><link rel="stylesheet" href="/style.css"><script type="module" src="/app.js"></script></head>
+<body>
+  <section id="login-view" class="login-page">
+    <form id="login-form" class="login-card">
+      <div class="brand"><span class="brand-icon">Ⅱ</span> pm2<span class="brand-m">m</span></div>
+      <p class="eyebrow">PROCESS MANAGER</p><h1>Всё под контролем.</h1><p class="muted">Ваши серверы и процессы — в одном месте.</p>
+      <label>Пароль администратора<input name="password" type="password" required autocomplete="current-password" placeholder="Введите пароль"></label>
+      <button class="primary" type="submit">Войти в панель <span>→</span></button><p id="login-error" class="error" role="alert"></p>
+      <small>Локальный PM2 · Удалённые серверы по SSH</small>
+    </form>
+  </section>
+  <div id="workspace" class="workspace" hidden>
+    <aside class="sidebar">
+      <div class="brand"><span class="brand-icon">Ⅱ</span> pm2<span class="brand-m">m</span></div>
+      <p class="eyebrow">РАБОЧЕЕ ПРОСТРАНСТВО</p>
+      <button id="nav-processes" class="nav active"><span>▦</span> Процессы</button>
+      <button id="nav-servers" class="nav"><span>▤</span> Серверы</button>
+      <button id="nav-settings" class="nav"><span>⚙</span> Настройки</button>
+      <div class="sidebar-bottom"><span class="small-dot"></span> Self-hosted control panel<p>PM2M <span>v1.0</span></p><button id="logout" class="text-button">Выйти из аккаунта ↗</button></div>
+    </aside>
+    <main>
+      <header class="topbar"><div><span class="muted">Workspace</span><span class="slash">/</span><span id="breadcrumb">Процессы</span></div><span class="admin"><span class="avatar">A</span> Администратор <button id="logout-mobile" class="text-button mobile-only">Выйти</button></span></header>
+      <section id="process-view" class="page">
+        <div class="page-heading"><div><p class="eyebrow">ОБЗОР И УПРАВЛЕНИЕ</p><h1>Процессы</h1><p class="muted">Состояние приложений. Все важные действия рядом.</p></div><button id="add-process" class="primary">＋ Новое приложение</button></div>
+        <div class="server-bar"><div><span class="server-icon">▤</span><label for="server-select">Сервер</label><select id="server-select" aria-label="Выбрать сервер"></select><span id="connection" class="badge neutral">Подключение…</span></div><div class="last-update"><span id="updated">Ожидание данных</span><button id="refresh" class="icon-button" title="Обновить" aria-label="Обновить">↻</button></div></div>
+        <div id="demo-banner" class="banner" hidden>Деморежим: локальные процессы демонстрационные. SSH-серверы подключаются в обычном режиме.</div>
+        <div id="process-error" class="banner danger" role="alert" hidden></div>
+        <div class="stats"><article><p>Всего процессов <span>▦</span></p><strong id="stat-total">—</strong><small>На выбранном сервере</small></article><article><p>Работают <span class="green">●</span></p><strong id="stat-online">—</strong><small id="stat-stopped">—</small></article><article><p>Использование CPU <span>⌁</span></p><strong id="stat-cpu">—</strong><small>Суммарно по процессам</small></article><article><p>Память процессов <span>▥</span></p><strong id="stat-memory">—</strong><small>Суммарное потребление RAM</small></article></div>
+        <section class="process-card"><div class="table-toolbar"><div><h2>Приложения <span id="process-count" class="count">0</span></h2><p class="muted">Автообновление каждые 5 секунд</p></div><div class="filters"><input id="search" type="search" placeholder="Поиск по имени…" aria-label="Поиск процессов"><select id="status-filter" aria-label="Фильтр статуса"><option value="all">Все статусы</option><option value="online">Работают</option><option value="stopped">Остановлены</option><option value="errored">С ошибкой</option></select></div></div>
+          <div class="table-scroll"><table><thead><tr><th>ПРИЛОЖЕНИЕ</th><th>СТАТУС</th><th>CPU / RAM</th><th>ВРЕМЯ РАБОТЫ</th><th>РЕСТАРТЫ</th><th class="right">ДЕЙСТВИЯ</th></tr></thead><tbody id="process-rows"></tbody></table></div><div id="empty-state" class="empty" hidden><strong>Процессов пока нет</strong><p>Добавьте приложение или измените фильтр поиска.</p></div>
+          <footer class="table-footer"><span id="host-info">—</span><button id="save-processes" class="text-button">Сохранить список PM2 ↗</button></footer>
+        </section><p class="footnote">Изменения применяются к выбранному серверу. Сохраните список PM2, чтобы использовать его при восстановлении процессов.</p>
+      </section>
+      <section id="servers-view" class="page" hidden>
+        <div class="page-heading"><div><p class="eyebrow">ПОДКЛЮЧЕНИЯ</p><h1>Серверы</h1><p class="muted">Локальные процессы и удалённые Linux-серверы.</p></div><button id="add-server" class="primary">＋ Добавить сервер</button></div>
+        <div id="server-cards" class="server-cards"></div>
+      </section>
+      <section id="settings-view" class="page" hidden>
+        <div class="page-heading"><div><p class="eyebrow">ПАРАМЕТРЫ ПАНЕЛИ</p><h1>Настройки</h1><p class="muted">Уведомления Telegram и анализ ошибок через ИИ.</p></div></div>
+        <div class="integration-settings">
+        <section class="ai-settings integration-card server-card">
+          <p class="eyebrow">АНАЛИЗ ОШИБОК</p><h2>ИИ · Groq</h2>
+          <p class="muted">Кнопка «ПРОАНАЛИЗИРОВАТЬ» под новыми уведомлениями stderr. Только по нажатию фрагмент ошибки (до 100 строк / 12 000 символов), имя сервера и состояние процессов передаются в Groq. Ответ приходит в Telegram. stdout не передаётся. Распознанные секреты скрываются, но произвольные конфиденциальные данные могут остаться в логах.</p>
+          <form id="ai-form">
+            <label class="check-label integration-toggle"><input id="ai-enabled" type="checkbox"> Включить анализ через Groq</label>
+            <label>API-ключ Groq<input id="ai-key" type="password" autocomplete="new-password" placeholder="gsk_…"></label>
+            <p id="ai-key-hint" class="muted"></p>
+            <label class="check-label"><input id="ai-clear-key" type="checkbox"> Удалить сохранённый ключ</label>
+            <label>Модель<input id="ai-model" value="openai/gpt-oss-20b" maxlength="120"></label>
+            <p class="muted">Ключ: console.groq.com/keys. Квоты зависят от аккаунта и модели. Один анализ за раз, не чаще раза в минуту на пользователя. Кнопка действует 24 часа до перезапуска бота; повторный ответ берётся из памяти.</p>
+            <p class="error" role="alert"></p>
+            <button type="submit" class="primary" disabled>Сохранить Groq</button>
+          </form>
+        </section>
+        <section class="telegram-settings integration-card server-card">
+          <p class="eyebrow">УВЕДОМЛЕНИЯ И УПРАВЛЕНИЕ</p><h2>Telegram</h2><p class="muted">Управление серверами и уведомления в личных сообщениях бота.</p>
+          <form id="telegram-form">
+            <label class="check-label integration-toggle"><input id="telegram-enabled" type="checkbox"> Включить Telegram-бота</label>
+            <label>Токен бота<input id="telegram-token" type="password" autocomplete="new-password" placeholder="Токен от @BotFather"></label>
+            <p id="telegram-token-hint" class="muted"></p>
+            <label class="check-label"><input id="telegram-clear-token" type="checkbox"> Удалить сохранённый токен</label>
+            <label>Разрешённые Telegram ID<input id="telegram-users" placeholder="123456789, 987654321" inputmode="numeric"></label>
+            <p class="muted">Сначала сохраните токен и включите бота. Отправьте ему /id в личном чате, затем добавьте полученный ID сюда и сохраните. Несколько ID — через запятую. Каждый получит доступ ко всем серверам и уведомления. Пока список пуст, управление недоступно. Команда /start откроет меню.</p>
+            <h3>Уведомления приложений</h3>
+            <p class="muted">Выберите приложения: новые записи stderr, изменение статуса, количества рестартов, удаление и потеря связи с сервером. Проверка каждые 30 секунд. Старые логи при включении не рассылаются; новые записи stderr приходят даже при статусе «Работает», до 30 последних строк за проверку. Stdout в уведомления не попадает.</p>
+            <button id="telegram-load-apps" type="button">Загрузить приложения серверов</button>
+            <div id="telegram-apps" class="telegram-apps"></div>
+            <p id="telegram-status" role="status" class="muted"></p>
+            <p class="error" role="alert"></p>
+            <button type="submit" class="primary">Сохранить Telegram</button>
+          </form>
+        </section>
+        </div>
+      </section>
+    </main>
+  </div>
+  <dialog id="process-dialog"><form id="process-form"><div class="dialog-heading"><h2>Новое приложение</h2><button type="button" data-close class="icon-button" aria-label="Закрыть">×</button></div><p id="process-target" class="muted">Пути указываются на выбранном сервере.</p><label>Имя приложения<input name="name" required pattern="[a-zA-Z0-9_-]{1,64}" placeholder="my-api"></label><label>Абсолютный путь к скрипту<input name="script" required placeholder="/srv/my-api/index.js"></label><label>Рабочая папка<input name="cwd" placeholder="/srv/my-api (по умолчанию папка скрипта)"></label><label>Версия Node.js<select id="node-version" name="interpreter" required disabled><option value="">Проверяем установленные версии…</option></select></label><p id="node-version-status" class="muted" role="status"></p><button id="reload-node-versions" type="button" class="text-button">↻ Проверить версии ещё раз</button><p class="form-error error" role="alert"></p><div class="dialog-actions"><button type="button" data-close>Отмена</button><button id="start-process" type="submit" class="primary" disabled>Запустить приложение</button></div></form></dialog>
+  <dialog id="server-dialog"><form id="server-form"><div class="dialog-heading"><h2 id="server-dialog-title">Добавить сервер</h2><button type="button" data-close class="icon-button" aria-label="Закрыть">×</button></div><input name="id" type="hidden"><label>Название<input name="name" required maxlength="80" placeholder="Production"></label><label>Тип подключения<select name="type"><option value="ssh">SSH · удалённый сервер</option><option value="local">Локальный PM2</option></select></label>
+      <div id="ssh-fields"><div class="form-grid"><label>Адрес сервера<input name="host" placeholder="192.168.1.10"></label><label>Порт<input name="port" type="number" value="22" min="1" max="65535"></label></div><label>Пользователь SSH<input name="username" placeholder="deploy" autocomplete="off"></label><label>Способ входа<select name="auth"><option value="password">Пароль</option><option value="key">SSH-ключ</option></select></label><label id="password-field">Пароль SSH<input name="password" type="password" autocomplete="new-password" placeholder="При редактировании: пусто — оставить прежний"></label><div id="key-fields" hidden><label>Путь к приватному ключу на машине панели<input name="keyPath" placeholder="/home/deploy/.ssh/id_ed25519"></label><label>Пароль ключа (если задан)<input name="passphrase" type="password" autocomplete="new-password"></label></div>
+      <div class="fingerprint-box"><label>Отпечаток ключа сервера<input name="fingerprint" placeholder="SHA256:…" spellcheck="false"></label><button id="probe-ssh" type="button">Получить отпечаток</button><small>Перед сохранением сверьте отпечаток с ключом вашего сервера. При изменении ключа подключение будет заблокировано.</small></div>
+      <details><summary>Дополнительные параметры PM2</summary><label>Исполняемый файл PM2<input name="pm2Path" placeholder="pm2 или /usr/local/bin/pm2"></label><label>PM2_HOME<input name="pm2Home" placeholder="По умолчанию ~/.pm2 пользователя SSH"></label></details></div>
+      <p id="local-hint" class="muted" hidden>Используется PM2 пользователя, от которого запущена панель, и переменная PM2_HOME из окружения панели.</p><p class="form-error error" role="alert"></p><div class="dialog-actions"><button type="button" data-close>Отмена</button><button type="submit" class="primary">Сохранить сервер</button></div></form></dialog>
+  <dialog id="logs-dialog" class="logs-dialog"><div class="dialog-heading"><div><p class="eyebrow">ЖУРНАЛ ПРИЛОЖЕНИЯ</p><h2 id="logs-title">Логи</h2></div><button data-close class="icon-button" aria-label="Закрыть">×</button></div><div class="log-toolbar"><div><button id="stdout-tab" class="active">stdout</button><button id="stderr-tab">stderr</button></div><div class="log-tools"><span id="log-status" class="muted">Последние 200 строк · обновление 5 с</span><button id="analyze-log" class="primary" type="button" disabled>🔎 Проанализировать</button></div></div><pre id="log-output"></pre><pre id="log-analysis" class="log-analysis" hidden></pre></dialog>
+  <div id="toast" class="toast" role="status" hidden></div>
+</body></html>

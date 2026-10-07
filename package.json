@@ -1,0 +1,20 @@
+{
+  "name": "pm2m",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Self-hosted PM2 web manager for Linux",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node --env-file-if-exists=.env server.js",
+    "demo": "node --env-file-if-exists=.env server.js --demo",
+    "test": "node --test"
+  },
+  "overrides": { "js-yaml": "^4.3.2" },
+  "dependencies": {
+    "pm2": "^7.0.4",
+    "ssh2": "^1.17.0"
+  }
+}
