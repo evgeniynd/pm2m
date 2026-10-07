@@ -94,7 +94,9 @@ async function refresh() {
   try {
     const data = await api(endpoint('/api/processes', target));
     if (current !== requestId || !authenticated) return;
-    connected = true; processes = data.processes;
+    connected = true;
+    const previousGit = new Map(processes.map(process => [process.id, process.git]));
+    processes = data.processes.map(process => ({ ...process, git: previousGit.get(process.id) }));
     $('#connection').textContent = '● Подключено'; $('#connection').className = 'badge online';
     $('#process-error').hidden = true; $('#demo-banner').hidden = !data.demo;
     $('#stat-total').textContent = processes.length;
