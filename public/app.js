@@ -1,7 +1,7 @@
 const $ = selector => document.querySelector(selector);
 const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
 let servers = [], processes = [], selected = localStorage.getItem('pm2m-server') || 'local';
-let authenticated = false, connected = false, requestId = 0, busy = false, loading = false;
+let authenticated = false, connected = false, requestId = 0, busy = false, loading = false, gitLoading = false;
 let logTarget = null, logStream = 'stdout', logData = {}, logLoading = false, toastTimer;
 let processTarget = null, versionsRequest = 0, versionsLoading = false;
 
@@ -63,13 +63,23 @@ function renderProcesses() {
   const filtered = processes.filter(p => p.name.toLowerCase().includes(query) && (status === 'all' || p.status === status));
   $('#process-count').textContent = processes.length;
   $('#process-rows').innerHTML = filtered.map(p => `<tr><td><div class="app-cell"><span class="app-icon">&gt;_</span><div><div class="app-name">${escape(p.name)}</div><div class="app-meta">#${p.id} · ${escape(p.mode === 'cluster_mode' ? 'cluster' : 'fork')} · PID ${p.pid || '—'}</div></div></div></td><td><span class="badge ${['online','stopped','errored'].includes(p.status) ? p.status : 'neutral'}">● &nbsp;${escape(statusName(p.status))}</span></td><td><div class="cpu">${Number(p.cpu).toFixed(1)}%</div><div class="ram">${memory(p.memory)}</div></td><td>${p.status === 'online' ? uptime(p.uptime) : '—'}</td><td>${p.restarts}</td><td><div class="row-actions"><button data-action="logs" data-id="${p.id}" title="Логи">Логи</button><button data-action="update" data-id="${p.id}" title="Обновить из GitHub">↥ Git</button>${p.status === 'online' ? `<button data-action="restart" data-id="${p.id}" title="Перезапустить" aria-label="Перезапустить ${escape(p.name)}">↻</button><button data-action="reload" data-id="${p.id}" title="Reload: плавная перезагрузка в cluster mode">Reload</button><button data-action="stop" data-id="${p.id}" title="Остановить" aria-label="Остановить ${escape(p.name)}">Ⅱ</button>` : `<button data-action="start" data-id="${p.id}" title="Запустить" aria-label="Запустить ${escape(p.name)}">▷</button>`}<button class="delete" data-action="delete" data-id="${p.id}" title="Удалить из PM2" aria-label="Удалить ${escape(p.name)}">×</button></div></td></tr>`).join('');
+  filtered.forEach(p => { const button = document.querySelector(`[data-action="update"][data-id="${p.id}"]`); if (!button) return; const git = p.git; if (!git?.available) { button.remove(); return; } button.dataset.updateAvailable = String(git.updateAvailable === true); button.textContent = git.updateAvailable === true ? '↥ Обновить' : git.error ? '↻ Git' : '✓ Актуально'; button.title = git.updateAvailable === true ? 'Есть обновление из GitHub' : git.error || 'Актуальная версия'; });
   $('#empty-state').hidden = filtered.length > 0;
   updateControls();
 }
 function updateControls() {
   $('#add-process').disabled = !connected || busy;
   $('#save-processes').disabled = !connected || busy;
-  document.querySelectorAll('[data-action]').forEach(button => { button.disabled = !connected || busy; });
+  document.querySelectorAll('[data-action]').forEach(button => { button.disabled = !connected || busy || (button.dataset.action === 'update' && button.dataset.updateAvailable !== 'true'); });
+}
+async function refreshGitUpdates(target = selected) {
+  if (!authenticated || !connected || gitLoading || target !== selected) return;
+  gitLoading = true;
+  try {
+    const { updates } = await api(endpoint('/api/processes/git-updates', target));
+    if (target !== selected) return;
+    processes = processes.map(p => ({ ...p, git: updates[String(p.id)] || undefined })); renderProcesses();
+  } catch {} finally { gitLoading = false; }
 }
 async function refresh() {
   const current = ++requestId; const target = selected;
@@ -96,6 +106,7 @@ async function refresh() {
     $('#updated').textContent = `Обновлено ${new Date().toLocaleTimeString('ru-RU')}`;
     $('#host-info').textContent = `${data.host} · ${data.platform}${data.demo ? ' · DEMO' : ''}`;
     renderProcesses();
+    void refreshGitUpdates(target);
   } catch (error) {
     if (current !== requestId) return;
     connected = false; $('#connection').textContent = 'Нет соединения'; $('#connection').className = 'badge errored';
@@ -249,6 +260,7 @@ async function refreshLogs() {
   } catch (error) { if (target === logTarget) $('#log-status').textContent = error.message; } finally { logLoading = false; if (target === logTarget) setLogStream(logStream); }
 }
 setInterval(() => { if (!authenticated || document.hidden) return; if (!$('#process-view').hidden && !loading && !busy) refresh(); if (logTarget) refreshLogs(); }, 5000);
+setInterval(() => { if (!authenticated || document.hidden || $('#process-view').hidden || busy) return; void refreshGitUpdates(); }, 30000);
 let telegramSubscriptions = [], telegramChoices = [], telegramLoaded = false;
 const subscriptionKey = s => JSON.stringify([s.serverId, s.name, s.script]);
 function telegramStatus(status) {

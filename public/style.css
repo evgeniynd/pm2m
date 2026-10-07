@@ -89,3 +89,4 @@
 .log-tools .primary { font-size: 11px; padding: 8px 11px; white-space: nowrap; }
 .log-analysis { min-height: 0; max-height: 35vh; margin-top: 14px; color: #d7d0ff; border-color: #493e70; }
 @media (max-width: 760px) { .log-tools { align-items: flex-start; flex-direction: column; width: 100%; } .log-tools .primary { width: 100%; } }
+.git-action{min-width:82px}.git-action:disabled{opacity:.75;cursor:default}.git-action.git-update{background:#1b3a32;border-color:#2e735d;color:#83e0bd;box-shadow:0 0 0 1px #2e735d33}.git-action.git-update:hover{background:#245143}
