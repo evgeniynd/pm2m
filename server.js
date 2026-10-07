@@ -126,7 +126,12 @@ export function createServer({ resolveManager, settings, password, telegram, dem
           : (typeof manager.system === 'function' ? await manager.system() : null)
       });
       if (req.method === 'GET' && url.pathname === '/api/node-versions') return send(200, { versions: await manager.nodeVersions() });
-      if (req.method === 'GET' && url.pathname === '/api/processes/git-updates') return send(200, { updates: typeof manager.gitUpdates === 'function' ? await manager.gitUpdates({ token: settings.github(true).token }) : {} });
+      if (req.method === 'GET' && url.pathname === '/api/processes/git-updates') {
+        const updates = typeof manager.gitUpdates === 'function' ? await manager.gitUpdates({ token: settings.github(true).token }) : {};
+        const linked = settings.gitPaths(target.id);
+        for (const [id, repository] of Object.entries(linked)) if (repository && !updates[id]?.available) updates[id] = { available: true, updateAvailable: null, error: 'Git подключён, но проверка репозитория не выполнена' };
+        return send(200, { updates });
+      }
       const gitChangesMatch = /^\/api\/processes\/(\d+)\/git-changes$/.exec(url.pathname);
       if (req.method === 'GET' && gitChangesMatch) {
         if (typeof manager.gitChanges !== 'function') return send(200, { available: false, commits: [] });
