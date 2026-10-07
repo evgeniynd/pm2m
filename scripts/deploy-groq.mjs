@@ -3,7 +3,7 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import ssh2 from 'ssh2';
 import { config } from './filnet-connection.mjs';
-const files=process.argv[3]==='ui' ? ['public/index.html','public/style.css','public/app.js'] : ['server.js','lib/settings.js','lib/telegram.js','lib/ai.js','lib/ssh.js','public/app.js','public/index.html'];
+const files=process.argv[3]==='ui' ? ['public/index.html','public/style.css','public/app.js'] : ['server.js','lib/settings.js','lib/telegram.js','lib/ai.js','lib/ssh.js','lib/manager.js','public/app.js','public/index.html'];
 const client=new ssh2.Client();
 await new Promise((resolve,reject)=>{client.on('ready',resolve).on('error',reject).connect({...config,readyTimeout:12000,hostVerifier:key=>'SHA256:'+createHash('sha256').update(key).digest('base64').replace(/=+$/,'')===config.fingerprint});});
 try {

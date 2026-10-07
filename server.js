@@ -111,13 +111,19 @@ export function createServer({ resolveManager, settings, password, telegram, dem
       if (req.method === 'POST' && url.pathname === '/api/processes') {
         const config = validateStart(body, target.type === 'ssh' ? path.posix : path);
         if (config.interpreter && !(await manager.nodeVersions()).some(node => node.path === config.interpreter)) throw new Error('Выбранная версия Node.js больше недоступна. Обновите список версий.');
-        await manager.start(config); return send(201, { ok: true });
+        if (config.repository) await manager.installRepository(config.repository, config.destination, config.branch);
+        const { repository, destination, branch, ...startConfig } = config;
+        await manager.start(startConfig); return send(201, { ok: true });
       }
       if (req.method === 'POST' && url.pathname === '/api/save') { await manager.save(); return send(200, { ok: true }); }
-      const match = /^\/api\/processes\/(\d+)\/(start|stop|restart|reload|delete|logs)$/.exec(url.pathname);
+      const match = /^\/api\/processes\/(\d+)\/(start|stop|restart|reload|delete|update|logs)$/.exec(url.pathname);
       if (match && Number.isSafeInteger(Number(match[1]))) {
         if (req.method === 'GET' && match[2] === 'logs') return send(200, await manager.logs(Number(match[1])));
-        if (req.method === 'POST' && match[2] !== 'logs') { await manager.action(Number(match[1]), match[2]); return send(200, { ok: true }); }
+        if (req.method === 'POST' && match[2] !== 'logs') {
+          if (match[2] === 'update') await manager.update(Number(match[1]));
+          else await manager.action(Number(match[1]), match[2]);
+          return send(200, { ok: true });
+        }
       }
       send(404, { error: 'Не найдено' });
     } catch (error) { send(400, { error: error.message || 'Не удалось выполнить операцию' }); }
