@@ -90,7 +90,8 @@ async function refresh() {
     const online = processes.filter(p => p.status === 'online').length;
     $('#stat-online').textContent = online; $('#stat-stopped').textContent = `${processes.length - online} не работают`;
     $('#stat-cpu').textContent = `${processes.reduce((sum, p) => sum + p.cpu, 0).toFixed(1)}%`;
-    $('#stat-memory').textContent = memory(processes.reduce((sum, p) => sum + p.memory, 0));
+    const processMemory = processes.reduce((sum, p) => sum + p.memory, 0);
+    $('#stat-memory').textContent = `${memory(processMemory)} / ${data.system?.totalMemory ? memory(data.system.totalMemory) : '—'}`;
     $('#updated').textContent = `Обновлено ${new Date().toLocaleTimeString('ru-RU')}`;
     $('#host-info').textContent = `${data.host} · ${data.platform}${data.demo ? ' · DEMO' : ''}`;
     renderProcesses();

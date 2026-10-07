@@ -103,7 +103,9 @@ export function createServer({ resolveManager, settings, password, telegram, dem
       }
       if (req.method === 'GET' && url.pathname === '/api/processes') return send(200, {
         processes: await manager.list(), host: target.type === 'ssh' ? target.host : os.hostname(), platform: target.type === 'ssh' ? 'linux' : os.platform(), demo: demo && target.type === 'local',
-        system: target.type === 'local' ? { cpus: os.cpus().length, totalMemory: os.totalmem(), usedMemory: os.totalmem() - os.freemem(), load: os.loadavg()[0] } : null
+        system: target.type === 'local'
+          ? { cpus: os.cpus().length, totalMemory: os.totalmem(), usedMemory: os.totalmem() - os.freemem(), load: os.loadavg()[0] }
+          : (typeof manager.system === 'function' ? await manager.system() : null)
       });
       if (req.method === 'GET' && url.pathname === '/api/node-versions') return send(200, { versions: await manager.nodeVersions() });
       if (req.method === 'POST' && url.pathname === '/api/processes') {
