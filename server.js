@@ -126,12 +126,15 @@ export function createServer({ resolveManager, settings, password, telegram, dem
           : (typeof manager.system === 'function' ? await manager.system() : null)
       });
       if (req.method === 'GET' && url.pathname === '/api/node-versions') return send(200, { versions: await manager.nodeVersions() });
-      if (req.method === 'GET' && url.pathname === '/api/processes/git-updates') return send(200, { updates: typeof manager.gitUpdates === 'function' ? await manager.gitUpdates({ token: settings.github(true).token }) : {} });
+      if (req.method === 'GET' && url.pathname === '/api/processes/git-updates') return send(200, { updates: typeof manager.gitUpdates === 'function' ? await manager.gitUpdates({ token: settings.github(true).token, paths: settings.gitPaths(target.id) }) : {} });
       const gitChangesMatch = /^\/api\/processes\/(\d+)\/git-changes$/.exec(url.pathname);
       if (req.method === 'GET' && gitChangesMatch) {
         if (typeof manager.gitChanges !== 'function') return send(200, { available: false, commits: [] });
-        return send(200, await manager.gitChanges(Number(gitChangesMatch[1]), { token: settings.github(true).token }));
+        const gitPath = settings.gitPaths(target.id)[gitChangesMatch[1]];
+        return send(200, await manager.gitChanges(Number(gitChangesMatch[1]), { token: settings.github(true).token, gitPath }));
       }
+      const gitPathMatch = /^\/api\/processes\/(\d+)\/git$/.exec(url.pathname);
+      if (req.method === 'POST' && gitPathMatch) return send(200, { path: await settings.saveGitPath(target.id, Number(gitPathMatch[1]), body.path) });
       if (req.method === 'POST' && url.pathname === '/api/processes') {
         const config = validateStart(body, target.type === 'ssh' ? path.posix : path);
         if (config.interpreter && !(await manager.nodeVersions()).some(node => node.path === config.interpreter)) throw new Error('Выбранная версия Node.js больше недоступна. Обновите список версий.');
@@ -144,7 +147,7 @@ export function createServer({ resolveManager, settings, password, telegram, dem
       if (match && Number.isSafeInteger(Number(match[1]))) {
         if (req.method === 'GET' && match[2] === 'logs') return send(200, await manager.logs(Number(match[1])));
         if (req.method === 'POST' && match[2] !== 'logs') {
-          if (match[2] === 'update') await manager.update(Number(match[1]), { token: settings.github(true).token });
+          if (match[2] === 'update') await manager.update(Number(match[1]), { token: settings.github(true).token, gitPath: settings.gitPaths(target.id)[match[1]] });
           else await manager.action(Number(match[1]), match[2]);
           return send(200, { ok: true });
         }
