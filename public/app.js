@@ -145,7 +145,7 @@ $('#process-rows').onclick = async event => {
     const repository = prompt(`URL GitHub-репозитория для «${p.name}» на сервере «${servers.find(s => s.id === target)?.name}»:`, 'https://github.com/owner/repository.git');
     if (!repository?.trim()) return;
     busy = true; updateControls();
-    try { await api(endpoint(`/api/processes/${id}/git`, target), { repository: repository.trim() }); toast('Git-репозиторий добавлен'); await refresh(); }
+    try { const result = await api(endpoint(`/api/processes/${id}/git`, target), { repository: repository.trim() }); processes = processes.map(item => item.id === id ? { ...item, git: result.git } : item); renderProcesses(); toast('Git-репозиторий добавлен'); await refresh(); }
     catch (error) { toast(error.message, true); } finally { busy = false; updateControls(); }
     return;
   }

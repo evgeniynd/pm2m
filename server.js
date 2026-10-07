@@ -137,7 +137,10 @@ export function createServer({ resolveManager, settings, password, telegram, dem
         const repository = String(body.repository || '').trim();
         if (typeof manager.attachRepository !== 'function') throw new Error('Подключение Git для этого менеджера недоступно');
         await manager.attachRepository(Number(gitPathMatch[1]), repository, { token: settings.github(true).token });
-        return send(200, { repository: await settings.saveGitPath(target.id, Number(gitPathMatch[1]), repository) });
+        const saved = await settings.saveGitPath(target.id, Number(gitPathMatch[1]), repository);
+        let updates = {};
+        try { if (typeof manager.gitUpdates === 'function') updates = await manager.gitUpdates({ token: settings.github(true).token }); } catch {}
+        return send(200, { repository: saved, git: updates[String(gitPathMatch[1])] || { available: true, updateAvailable: null, error: 'Проверка Git выполняется' } });
       }
       if (req.method === 'POST' && url.pathname === '/api/processes') {
         const config = validateStart(body, target.type === 'ssh' ? path.posix : path);
