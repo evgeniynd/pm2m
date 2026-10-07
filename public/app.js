@@ -151,17 +151,22 @@ $('#process-rows').onclick = async event => {
   }
   if (action === 'update') {
     busy = true; updateControls();
+    const dialog = $('#git-update-dialog'); const confirmButton = $('#git-update-confirm'); const cancelButton = $('#git-update-cancel');
+    $('#git-update-title').textContent = `Обновление · ${p.name}`; $('#git-update-status').textContent = 'Получаем список изменений…'; $('#git-update-changes').hidden = true; $('#git-update-changes').textContent = ''; confirmButton.disabled = true; cancelButton.disabled = false; dialog.oncancel = event => event.preventDefault(); dialog.showModal();
     try {
       const data = await api(endpoint(`/api/processes/${id}/git-changes`, target));
       if (data.error) throw new Error(data.error);
-      if (!data.commits?.length) { toast('Новых коммитов не найдено'); return; }
+      if (!data.commits?.length) { $('#git-update-status').textContent = 'Новых коммитов не найдено.'; await new Promise(resolve => setTimeout(resolve, 1200)); return; }
       const changes = data.commits.map(commit => {
         const date = commit.date ? new Date(commit.date).toLocaleString('ru-RU') : '';
         return `• ${commit.subject || 'Без сообщения'}\n  ${commit.hash || ''} · ${commit.author || 'Неизвестный автор'}${date ? ` · ${date}` : ''}`;
       }).join('\n');
-      if (!confirm(`Изменения в «${p.name}»:\n\n${changes}\n\nУстановить эти изменения и перезапустить приложение?`)) return;
+      $('#git-update-status').textContent = 'Проверьте изменения перед обновлением.'; $('#git-update-changes').textContent = changes; $('#git-update-changes').hidden = false; confirmButton.disabled = false;
+      const approved = await new Promise(resolve => { const finish = value => { confirmButton.onclick = null; cancelButton.onclick = null; resolve(value); }; confirmButton.onclick = () => finish(true); cancelButton.onclick = () => finish(false); });
+      if (!approved) return;
+      confirmButton.disabled = true; cancelButton.disabled = true; $('#git-update-status').textContent = 'Устанавливаем изменения и перезапускаем приложение…';
       await api(endpoint(`/api/processes/${id}/update`, target), {}); toast('Приложение обновлено'); await refresh();
-    } catch (error) { toast(error.message, true); } finally { busy = false; updateControls(); }
+    } catch (error) { toast(error.message, true); } finally { if (dialog.open) dialog.close(); dialog.oncancel = null; busy = false; updateControls(); }
     return;
   }
   const verbs = { update: 'Обновить из GitHub', stop: 'Остановить', restart: 'Перезапустить', reload: 'Перезагрузить', delete: 'Удалить из PM2' };
