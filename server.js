@@ -127,6 +127,11 @@ export function createServer({ resolveManager, settings, password, telegram, dem
       });
       if (req.method === 'GET' && url.pathname === '/api/node-versions') return send(200, { versions: await manager.nodeVersions() });
       if (req.method === 'GET' && url.pathname === '/api/processes/git-updates') return send(200, { updates: typeof manager.gitUpdates === 'function' ? await manager.gitUpdates({ token: settings.github(true).token }) : {} });
+      const gitChangesMatch = /^\/api\/processes\/(\d+)\/git-changes$/.exec(url.pathname);
+      if (req.method === 'GET' && gitChangesMatch) {
+        if (typeof manager.gitChanges !== 'function') return send(200, { available: false, commits: [] });
+        return send(200, await manager.gitChanges(Number(gitChangesMatch[1]), { token: settings.github(true).token }));
+      }
       if (req.method === 'POST' && url.pathname === '/api/processes') {
         const config = validateStart(body, target.type === 'ssh' ? path.posix : path);
         if (config.interpreter && !(await manager.nodeVersions()).some(node => node.path === config.interpreter)) throw new Error('Выбранная версия Node.js больше недоступна. Обновите список версий.');

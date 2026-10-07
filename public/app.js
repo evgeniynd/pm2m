@@ -141,6 +141,21 @@ $('#process-rows').onclick = async event => {
   const id = Number(button.dataset.id), action = button.dataset.action, target = selected;
   const p = processes.find(p => p.id === id); if (!p) return;
   if (action === 'logs') { logTarget = { id, server: target }; logStream = 'stdout'; logData = {}; $('#logs-title').textContent = p.name; $('#log-output').textContent = 'Загрузка…'; $('#log-analysis').hidden = true; $('#log-analysis').textContent = ''; $('#logs-dialog').showModal(); setLogStream('stdout'); await refreshLogs(); return; }
+  if (action === 'update') {
+    busy = true; updateControls();
+    try {
+      const data = await api(endpoint(`/api/processes/${id}/git-changes`, target));
+      if (data.error) throw new Error(data.error);
+      if (!data.commits?.length) { toast('Новых коммитов не найдено'); return; }
+      const changes = data.commits.map(commit => {
+        const date = commit.date ? new Date(commit.date).toLocaleString('ru-RU') : '';
+        return `• ${commit.subject || 'Без сообщения'}\n  ${commit.hash || ''} · ${commit.author || 'Неизвестный автор'}${date ? ` · ${date}` : ''}`;
+      }).join('\n');
+      if (!confirm(`Изменения в «${p.name}»:\n\n${changes}\n\nУстановить эти изменения и перезапустить приложение?`)) return;
+      await api(endpoint(`/api/processes/${id}/update`, target), {}); toast('Приложение обновлено'); await refresh();
+    } catch (error) { toast(error.message, true); } finally { busy = false; updateControls(); }
+    return;
+  }
   const verbs = { update: 'Обновить из GitHub', stop: 'Остановить', restart: 'Перезапустить', reload: 'Перезагрузить', delete: 'Удалить из PM2' };
   if (verbs[action] && !confirm(`${verbs[action]} «${p.name}» на сервере «${servers.find(s => s.id === target)?.name}»?`)) return;
   busy = true; updateControls();
