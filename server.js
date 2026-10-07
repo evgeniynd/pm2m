@@ -127,7 +127,8 @@ export function createServer({ resolveManager, settings, password, telegram, dem
       });
       if (req.method === 'GET' && url.pathname === '/api/node-versions') return send(200, { versions: await manager.nodeVersions() });
       if (req.method === 'GET' && url.pathname === '/api/processes/git-updates') {
-        const updates = typeof manager.gitUpdates === 'function' ? await manager.gitUpdates({ token: settings.github(true).token }) : {};
+        let updates = {};
+        try { if (typeof manager.gitUpdates === 'function') updates = await manager.gitUpdates({ token: settings.github(true).token }); } catch {}
         const linked = settings.gitPaths(target.id);
         for (const [id, repository] of Object.entries(linked)) if (repository && !updates[id]?.available) updates[id] = { available: true, updateAvailable: null, error: 'Git подключён, но проверка репозитория не выполнена' };
         return send(200, { updates });
