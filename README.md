@@ -1,5 +1,10 @@
 # PM2M
 
+<img width="1888" height="904" alt="Снимок" src="https://github.com/user-attachments/assets/c29bef13-fc1e-4363-81da-352b08412256" /><img width="1902" height="915" alt="Снимок3" src="https://github.com/user-attachments/assets/8993dbe8-8d0d-4c4f-828c-489c3f18a514" />
+<img width="1911" height="913" alt="Снимок2" src="https://github.com/user-attachments/assets/c0e14115-8a13-4de8-b47f-fcfaf27bc5ba" />
+
+
+
 Веб-панель на Node.js для управления локальным PM2 и несколькими Linux-серверами по SSH.
 
 Возможности: переключение серверов, CPU/RAM процессов, поиск и фильтр статуса, запуск приложения, start/stop/restart/reload/delete, просмотр stdout/stderr с обновлением, сохранение списка PM2. Настройки серверов добавляются и редактируются через интерфейс.
