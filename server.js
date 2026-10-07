@@ -126,15 +126,19 @@ export function createServer({ resolveManager, settings, password, telegram, dem
           : (typeof manager.system === 'function' ? await manager.system() : null)
       });
       if (req.method === 'GET' && url.pathname === '/api/node-versions') return send(200, { versions: await manager.nodeVersions() });
-      if (req.method === 'GET' && url.pathname === '/api/processes/git-updates') return send(200, { updates: typeof manager.gitUpdates === 'function' ? await manager.gitUpdates({ token: settings.github(true).token, paths: settings.gitPaths(target.id) }) : {} });
+      if (req.method === 'GET' && url.pathname === '/api/processes/git-updates') return send(200, { updates: typeof manager.gitUpdates === 'function' ? await manager.gitUpdates({ token: settings.github(true).token }) : {} });
       const gitChangesMatch = /^\/api\/processes\/(\d+)\/git-changes$/.exec(url.pathname);
       if (req.method === 'GET' && gitChangesMatch) {
         if (typeof manager.gitChanges !== 'function') return send(200, { available: false, commits: [] });
-        const gitPath = settings.gitPaths(target.id)[gitChangesMatch[1]];
-        return send(200, await manager.gitChanges(Number(gitChangesMatch[1]), { token: settings.github(true).token, gitPath }));
+        return send(200, await manager.gitChanges(Number(gitChangesMatch[1]), { token: settings.github(true).token }));
       }
       const gitPathMatch = /^\/api\/processes\/(\d+)\/git$/.exec(url.pathname);
-      if (req.method === 'POST' && gitPathMatch) return send(200, { path: await settings.saveGitPath(target.id, Number(gitPathMatch[1]), body.path) });
+      if (req.method === 'POST' && gitPathMatch) {
+        const repository = String(body.repository || '').trim();
+        if (typeof manager.attachRepository !== 'function') throw new Error('Подключение Git для этого менеджера недоступно');
+        await manager.attachRepository(Number(gitPathMatch[1]), repository, { token: settings.github(true).token });
+        return send(200, { repository: await settings.saveGitPath(target.id, Number(gitPathMatch[1]), repository) });
+      }
       if (req.method === 'POST' && url.pathname === '/api/processes') {
         const config = validateStart(body, target.type === 'ssh' ? path.posix : path);
         if (config.interpreter && !(await manager.nodeVersions()).some(node => node.path === config.interpreter)) throw new Error('Выбранная версия Node.js больше недоступна. Обновите список версий.');
@@ -147,7 +151,7 @@ export function createServer({ resolveManager, settings, password, telegram, dem
       if (match && Number.isSafeInteger(Number(match[1]))) {
         if (req.method === 'GET' && match[2] === 'logs') return send(200, await manager.logs(Number(match[1])));
         if (req.method === 'POST' && match[2] !== 'logs') {
-          if (match[2] === 'update') await manager.update(Number(match[1]), { token: settings.github(true).token, gitPath: settings.gitPaths(target.id)[match[1]] });
+          if (match[2] === 'update') await manager.update(Number(match[1]), { token: settings.github(true).token });
           else await manager.action(Number(match[1]), match[2]);
           return send(200, { ok: true });
         }
