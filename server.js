@@ -21,7 +21,7 @@ async function githubJson(url, options = {}) {
   if (!response.ok) throw new Error('GitHub отклонил запрос авторизации. Проверьте Client ID и настройки Device Flow.');
   return result;
 }
-export function createServer({ resolveManager, settings, password, telegram, githubClientId = process.env.GITHUB_CLIENT_ID || '', demo = false, secure = false, sessions = memorySessions() }) {
+export function createServer({ resolveManager, settings, password, telegram, demo = false, secure = false, sessions = memorySessions() }) {
   const attempts = new Map();
   const cookie = (value, age) => `pm2m_session=${value}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${age}${secure ? '; Secure' : ''}`;
   const maintenance = setInterval(() => {
@@ -68,24 +68,14 @@ export function createServer({ resolveManager, settings, password, telegram, git
         await sessions.revoke(token); res.setHeader('Set-Cookie', cookie('', 0)); return send(200, { ok: true });
       }
       res.setHeader('Set-Cookie', cookie(token, COOKIE_MAX_AGE));
-      if (req.method === 'GET' && url.pathname === '/api/github') return send(200, { config: { clientConfigured: Boolean(githubClientId), hasToken: settings.github().hasToken } });
-      if (req.method === 'POST' && url.pathname === '/api/github/device') {
-        if (!githubClientId) throw new Error('Настройте GITHUB_CLIENT_ID в .env панели.');
-        const result = await githubJson('https://github.com/login/device/code', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ client_id: githubClientId, scope: 'repo' }) });
-        if (!result.device_code || !result.user_code || !result.verification_uri) throw new Error('GitHub не выдал код авторизации.');
-        return send(200, { deviceCode: result.device_code, userCode: result.user_code, verificationUri: result.verification_uri, expiresIn: result.expires_in, interval: result.interval || 5 });
-      }
+      if (req.method === 'GET' && url.pathname === '/api/github') return send(200, { config: { hasToken: settings.github().hasToken } });
       if (req.method === 'POST' && url.pathname === '/api/github/token') {
-        if (!githubClientId) throw new Error('Настройте GITHUB_CLIENT_ID в .env панели.');
-        const deviceCode = String(body.deviceCode || '').trim();
-        if (!/^[A-Za-z0-9_-]{20,200}$/.test(deviceCode)) throw new Error('Некорректный код устройства GitHub.');
-        const result = await githubJson('https://github.com/login/oauth/access_token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ client_id: githubClientId, device_code: deviceCode, grant_type: 'urn:ietf:params:oauth:grant-type:device_code' }) });
-        if (result.error === 'authorization_pending') return send(202, { pending: true, interval: result.interval || 5 });
-        if (result.error === 'slow_down') return send(202, { pending: true, interval: (result.interval || 5) + 5 });
-        if (result.error) throw new Error(result.error === 'expired_token' ? 'Код GitHub истёк. Начните авторизацию заново.' : 'GitHub не подтвердил авторизацию.');
-        if (!result.access_token) throw new Error('GitHub не вернул токен авторизации.');
-        await settings.saveGithubToken(result.access_token);
-        return send(200, { connected: true });
+        const githubToken = String(body.token || '').trim();
+        if (!/^(?:ghp_|gho_|ghu_|github_pat_)[A-Za-z0-9_]+$/.test(githubToken)) throw new Error('Укажите GitHub Personal Access Token.');
+        const profile = await githubJson('https://api.github.com/user', { headers: { Authorization: `Bearer ${githubToken}`, 'User-Agent': 'PM2M' } });
+        if (!profile.login) throw new Error('GitHub не подтвердил токен или токен не имеет доступа к API.');
+        await settings.saveGithubToken(githubToken);
+        return send(200, { connected: true, login: profile.login });
       }
       if (req.method === 'POST' && url.pathname === '/api/github/disconnect') { await settings.saveGithubToken(''); return send(200, { connected: false }); }
       if (req.method === 'GET' && url.pathname === '/api/ai') return send(200, { config: settings.ai() });
