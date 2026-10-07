@@ -13,7 +13,15 @@ import { createTelegram } from './lib/telegram.js';
 import { analyzeGroq, redact } from './lib/ai.js';
 
 const digest = value => createHash('sha256').update(value).digest();
-export function createServer({ resolveManager, settings, password, telegram, demo = false, secure = false, sessions = memorySessions() }) {
+async function githubJson(url, options = {}) {
+  let response;
+  try { response = await fetch(url, { ...options, headers: { Accept: 'application/json', ...(options.headers || {}) }, signal: AbortSignal.timeout(15000) }); }
+  catch { throw new Error('GitHub недоступен. Проверьте соединение панели.'); }
+  let result = {}; try { result = await response.json(); } catch {}
+  if (!response.ok) throw new Error('GitHub отклонил запрос авторизации. Проверьте Client ID и настройки Device Flow.');
+  return result;
+}
+export function createServer({ resolveManager, settings, password, telegram, githubClientId = process.env.GITHUB_CLIENT_ID || '', demo = false, secure = false, sessions = memorySessions() }) {
   const attempts = new Map();
   const cookie = (value, age) => `pm2m_session=${value}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${age}${secure ? '; Secure' : ''}`;
   const maintenance = setInterval(() => {
@@ -60,6 +68,26 @@ export function createServer({ resolveManager, settings, password, telegram, dem
         await sessions.revoke(token); res.setHeader('Set-Cookie', cookie('', 0)); return send(200, { ok: true });
       }
       res.setHeader('Set-Cookie', cookie(token, COOKIE_MAX_AGE));
+      if (req.method === 'GET' && url.pathname === '/api/github') return send(200, { config: { clientConfigured: Boolean(githubClientId), hasToken: settings.github().hasToken } });
+      if (req.method === 'POST' && url.pathname === '/api/github/device') {
+        if (!githubClientId) throw new Error('Настройте GITHUB_CLIENT_ID в .env панели.');
+        const result = await githubJson('https://github.com/login/device/code', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ client_id: githubClientId, scope: 'repo' }) });
+        if (!result.device_code || !result.user_code || !result.verification_uri) throw new Error('GitHub не выдал код авторизации.');
+        return send(200, { deviceCode: result.device_code, userCode: result.user_code, verificationUri: result.verification_uri, expiresIn: result.expires_in, interval: result.interval || 5 });
+      }
+      if (req.method === 'POST' && url.pathname === '/api/github/token') {
+        if (!githubClientId) throw new Error('Настройте GITHUB_CLIENT_ID в .env панели.');
+        const deviceCode = String(body.deviceCode || '').trim();
+        if (!/^[A-Za-z0-9_-]{20,200}$/.test(deviceCode)) throw new Error('Некорректный код устройства GitHub.');
+        const result = await githubJson('https://github.com/login/oauth/access_token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ client_id: githubClientId, device_code: deviceCode, grant_type: 'urn:ietf:params:oauth:grant-type:device_code' }) });
+        if (result.error === 'authorization_pending') return send(202, { pending: true, interval: result.interval || 5 });
+        if (result.error === 'slow_down') return send(202, { pending: true, interval: (result.interval || 5) + 5 });
+        if (result.error) throw new Error(result.error === 'expired_token' ? 'Код GitHub истёк. Начните авторизацию заново.' : 'GitHub не подтвердил авторизацию.');
+        if (!result.access_token) throw new Error('GitHub не вернул токен авторизации.');
+        await settings.saveGithubToken(result.access_token);
+        return send(200, { connected: true });
+      }
+      if (req.method === 'POST' && url.pathname === '/api/github/disconnect') { await settings.saveGithubToken(''); return send(200, { connected: false }); }
       if (req.method === 'GET' && url.pathname === '/api/ai') return send(200, { config: settings.ai() });
       if (req.method === 'POST' && url.pathname === '/api/ai') {
         await settings.saveAi(body);
@@ -111,7 +139,7 @@ export function createServer({ resolveManager, settings, password, telegram, dem
       if (req.method === 'POST' && url.pathname === '/api/processes') {
         const config = validateStart(body, target.type === 'ssh' ? path.posix : path);
         if (config.interpreter && !(await manager.nodeVersions()).some(node => node.path === config.interpreter)) throw new Error('Выбранная версия Node.js больше недоступна. Обновите список версий.');
-        if (config.repository) await manager.installRepository(config.repository, config.destination, config.branch);
+        if (config.repository) await manager.installRepository(config.repository, config.destination, config.branch, { token: settings.github(true).token });
         const { repository, destination, branch, ...startConfig } = config;
         await manager.start(startConfig); return send(201, { ok: true });
       }
@@ -120,7 +148,7 @@ export function createServer({ resolveManager, settings, password, telegram, dem
       if (match && Number.isSafeInteger(Number(match[1]))) {
         if (req.method === 'GET' && match[2] === 'logs') return send(200, await manager.logs(Number(match[1])));
         if (req.method === 'POST' && match[2] !== 'logs') {
-          if (match[2] === 'update') await manager.update(Number(match[1]));
+          if (match[2] === 'update') await manager.update(Number(match[1]), { token: settings.github(true).token });
           else await manager.action(Number(match[1]), match[2]);
           return send(200, { ok: true });
         }

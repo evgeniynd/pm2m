@@ -54,6 +54,14 @@
             <button type="submit" class="primary" disabled>Сохранить Groq</button>
           </form>
         </section>
+        <section class="github-settings integration-card server-card">
+          <p class="eyebrow">РЕПОЗИТОРИИ</p><h2>GitHub</h2>
+          <p class="muted">Подключите GitHub через Device Flow, чтобы устанавливать и обновлять приватные репозитории без ввода пароля или токена в URL.</p>
+          <p id="github-status" class="muted" role="status">Проверяем подключение…</p>
+          <button id="github-connect" type="button" class="primary">🔗 Подключить GitHub</button>
+          <div id="github-device" class="github-device" hidden><p>Откройте <a id="github-device-link" href="https://github.com/login/device" target="_blank" rel="noreferrer">github.com/login/device</a> и введите код:</p><code id="github-user-code"></code><button id="github-check" type="button">✅ Проверить авторизацию</button></div>
+          <button id="github-disconnect" type="button" class="text-button" hidden>Отключить GitHub</button>
+        </section>
         <section class="telegram-settings integration-card server-card">
           <p class="eyebrow">УВЕДОМЛЕНИЯ И УПРАВЛЕНИЕ</p><h2>Telegram</h2><p class="muted">Управление серверами и уведомления в личных сообщениях бота.</p>
           <form id="telegram-form">

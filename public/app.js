@@ -11,6 +11,7 @@ async function api(path, body) {
     body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(45000) });
   const data = await response.json();
   if (response.status === 401 && path !== '/api/login') showLogin();
+  if (response.status === 202) return data;
   if (!response.ok) throw new Error(data.error || 'Не удалось выполнить запрос');
   return data;
 }
@@ -37,7 +38,7 @@ function navigate(view) {
   }
   $('#breadcrumb').textContent = sections[view][1];
   if (view === 'processes') refresh();
-  if (view === 'settings') { loadTelegram().catch(error => toast(error.message, true)); loadAi().catch(error => toast(error.message, true)); }
+  if (view === 'settings') { loadTelegram().catch(error => toast(error.message, true)); loadAi().catch(error => toast(error.message, true)); loadGithub().catch(error => toast(error.message, true)); }
 }
 function memory(bytes) { return bytes >= 1024 ** 3 ? `${(bytes / 1024 ** 3).toFixed(2)} GB` : `${(bytes / 1024 ** 2).toFixed(1)} MB`; }
 function uptime(ms) {
@@ -330,4 +331,36 @@ $('#ai-form').onsubmit = async event => {
     await loadAi(); toast('Настройки Groq сохранены');
   } catch (error) { $('#ai-form .error').textContent = error.message; }
   finally { event.submitter.disabled = !aiLoaded; }
+};
+let githubDeviceCode = '', githubLoaded = false;
+async function loadGithub() {
+  const { config } = await api('/api/github'); githubLoaded = true;
+  $('#github-connect').hidden = Boolean(config.hasToken || !config.clientConfigured);
+  $('#github-disconnect').hidden = !config.hasToken;
+  $('#github-device').hidden = true; githubDeviceCode = '';
+  $('#github-status').textContent = config.hasToken ? '✅ GitHub подключён. Приватные репозитории доступны для clone и update.' : config.clientConfigured ? 'GitHub не подключён.' : 'Добавьте GITHUB_CLIENT_ID в .env и перезапустите панель.';
+}
+$('#github-connect').onclick = async event => {
+  event.currentTarget.disabled = true; $('#github-status').textContent = 'Запрашиваем код GitHub…';
+  try {
+    const data = await api('/api/github/device', {}); githubDeviceCode = data.deviceCode;
+    $('#github-user-code').textContent = data.userCode; $('#github-device-link').href = data.verificationUri;
+    $('#github-device').hidden = false; $('#github-status').textContent = `Код действует ${Math.round(data.expiresIn / 60)} минут.`;
+  } catch (error) { $('#github-status').textContent = error.message; }
+  finally { event.currentTarget.disabled = false; }
+};
+$('#github-check').onclick = async event => {
+  if (!githubDeviceCode) return; event.currentTarget.disabled = true;
+  try {
+    const data = await api('/api/github/token', { deviceCode: githubDeviceCode });
+    if (data.pending) { $('#github-status').textContent = '⏳ Авторизация ещё не подтверждена на GitHub.'; return; }
+    await loadGithub(); toast('GitHub подключён');
+  } catch (error) { $('#github-status').textContent = error.message; }
+  finally { event.currentTarget.disabled = false; }
+};
+$('#github-disconnect').onclick = async event => {
+  event.currentTarget.disabled = true;
+  try { await api('/api/github/disconnect', {}); await loadGithub(); toast('GitHub отключён'); }
+  catch (error) { $('#github-status').textContent = error.message; }
+  finally { event.currentTarget.disabled = false; }
 };
