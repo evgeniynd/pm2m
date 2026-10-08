@@ -3,7 +3,7 @@ const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': 
 let servers = [], processes = [], selected = localStorage.getItem('pm2m-server') || 'local';
 let authenticated = false, connected = false, requestId = 0, busy = false, loading = false, gitLoading = false;
 let logTarget = null, logStream = 'stdout', logData = {}, logLoading = false, toastTimer;
-let processTarget = null, versionsRequest = 0, versionsLoading = false, autoAppPath = '';
+let processTarget = null, versionsRequest = 0, versionsLoading = false, autoAppPath = '', autoScriptPath = '';
 
 async function api(path, body) {
   const response = await fetch(path, { method: body === undefined ? 'GET' : 'POST',
@@ -205,7 +205,7 @@ async function loadNodeVersions() {
   }
 }
 $('#add-process').onclick = () => {
-  processTarget = selected; autoAppPath = ''; $('#process-form').reset(); $('#process-form .error').textContent = '';
+  processTarget = selected; autoAppPath = ''; autoScriptPath = ''; $('#process-form').reset(); $('#process-form .error').textContent = '';
   $('#process-target').textContent = `Сервер: ${servers.find(s => s.id === processTarget)?.name}. Все пути относятся к этому серверу.`;
   $('#process-dialog').showModal(); loadNodeVersions();
 };
@@ -283,10 +283,11 @@ $('#analyze-log').onclick = async () => {
 };
 $('#process-form').elements.name.addEventListener('input', event => {
   const root = servers.find(server => server.id === processTarget)?.appRoot || '/Projects'; const separator = root.includes('\\') ? '\\' : '/'; const next = `${root.replace(/[\\/]+$/, '')}${separator}${event.target.value.trim()}`;
-  const destination = $('#process-form').elements.destination; const cwd = $('#process-form').elements.cwd;
+  const destination = $('#process-form').elements.destination; const cwd = $('#process-form').elements.cwd; const script = $('#process-form').elements.script; const nextScript = `${next}${separator}index.js`;
   if (!destination.value || destination.value === autoAppPath) destination.value = next;
   if (!cwd.value || cwd.value === autoAppPath) cwd.value = next;
-  autoAppPath = next;
+  if (!script.value || script.value === autoScriptPath) script.value = nextScript;
+  autoAppPath = next; autoScriptPath = nextScript;
 });
 async function refreshLogs() {
   if (!logTarget || logLoading) return;
