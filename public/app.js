@@ -1,7 +1,7 @@
 const $ = selector => document.querySelector(selector);
 const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
 let servers = [], processes = [], selected = localStorage.getItem('pm2m-server') || 'local';
-let authenticated = false, connected = false, requestId = 0, busy = false, loading = false, gitLoading = false;
+let authenticated = false, connected = false, requestId = 0, busy = false, loading = false, gitLoading = false, gitInitialLoading = false, gitReady = false;
 let logTarget = null, logStream = 'stdout', logData = {}, logLoading = false, toastTimer;
 let processTarget = null, versionsRequest = 0, versionsLoading = false, autoAppPath = '', autoScriptPath = '';
 
@@ -71,7 +71,7 @@ function renderProcesses() {
       transfer.textContent = '⇢'; transfer.title = 'Перенести приложение на другой сервер';
       actions.insertBefore(transfer, actions.firstElementChild);
     }
-    const button = document.querySelector(`[data-action="update"][data-id="${p.id}"]`); if (!button) return; if (gitLoading) { button.classList.add('git-loading'); button.innerHTML = '<span class="mini-spinner" aria-label="Проверка Git"></span>'; button.title = 'Проверяем Git…'; return; } const git = p.git; if (!git?.available) { button.dataset.action = 'add-git'; button.textContent = '＋ Git'; button.title = 'Указать URL GitHub-репозитория'; return; } if (git.error) { button.dataset.action = 'add-git'; button.textContent = '↻ Git'; button.title = git.error; return; } if (git.updateAvailable !== true) { button.outerHTML = '<span class="git-current">✓ Актуально</span>'; return; } button.dataset.updateAvailable = 'true'; button.classList.add('git-update'); button.textContent = '↥ Обновить'; button.title = 'Есть обновление из GitHub';
+    const button = document.querySelector(`[data-action="update"][data-id="${p.id}"]`); if (!button) return; if (gitInitialLoading) { button.classList.add('git-loading'); button.innerHTML = '<span class="mini-spinner" aria-label="Проверка Git"></span>'; button.title = 'Проверяем Git…'; return; } const git = p.git; if (!git?.available) { button.dataset.action = 'add-git'; button.textContent = '＋ Git'; button.title = 'Указать URL GitHub-репозитория'; return; } if (git.error) { button.dataset.action = 'add-git'; button.textContent = '↻ Git'; button.title = git.error; return; } if (git.updateAvailable !== true) { button.outerHTML = '<span class="git-current">✓ Актуально</span>'; return; } button.dataset.updateAvailable = 'true'; button.classList.add('git-update'); button.textContent = '↥ Обновить'; button.title = 'Есть обновление из GitHub';
   });
   $('#empty-state').hidden = filtered.length > 0;
   updateControls();
@@ -85,13 +85,13 @@ function showOperation(message) { $('#operation-message').textContent = message;
 function hideOperation() { const dialog = $('#operation-dialog'); if (dialog.open) dialog.close(); }
 async function refreshGitUpdates(target = selected) {
   if (!authenticated || !connected || gitLoading || target !== selected) return;
-  gitLoading = true;
-  renderProcesses();
+  gitLoading = true; gitInitialLoading = !gitReady;
+  if (gitInitialLoading) renderProcesses();
   try {
     const { updates } = await api(endpoint('/api/processes/git-updates', target));
     if (target !== selected) return;
-    processes = processes.map(p => ({ ...p, git: updates[String(p.id)] || undefined })); renderProcesses();
-  } catch {} finally { gitLoading = false; if (target === selected) renderProcesses(); }
+    processes = processes.map(p => ({ ...p, git: updates[String(p.id)] || undefined }));
+  } catch {} finally { gitLoading = false; gitReady = true; gitInitialLoading = false; if (target === selected) renderProcesses(); }
 }
 async function refresh() {
   const current = ++requestId; const target = selected;
@@ -128,7 +128,7 @@ async function refresh() {
   } finally { if (current === requestId) loading = false; }
 }
 async function selectServer(id) {
-  selected = id; localStorage.setItem('pm2m-server', id); $('#server-select').value = id;
+  selected = id; gitReady = false; gitInitialLoading = false; localStorage.setItem('pm2m-server', id); $('#server-select').value = id;
   connected = false; processes = []; renderProcesses(); $('#connection').textContent = 'Подключение…'; $('#connection').className = 'badge neutral';
   for (const key of ['total','online','cpu','memory']) $(`#stat-${key}`).textContent = '—';
   $('#stat-stopped').textContent = '—'; $('#host-info').textContent = '—'; $('#updated').textContent = 'Ожидание данных'; $('#demo-banner').hidden = true;
