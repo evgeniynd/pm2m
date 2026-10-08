@@ -103,11 +103,14 @@ async function refresh() {
   }
   loading = true;
   try {
-    const data = await api(endpoint('/api/processes', target));
+    const [data, gitResult] = await Promise.all([
+      api(endpoint('/api/processes', target)),
+      api(endpoint('/api/processes/git-updates', target)).catch(() => null)
+    ]);
     if (current !== requestId || !authenticated) return;
     connected = true;
     const previousGit = new Map(processes.map(process => [process.id, process.git]));
-    processes = data.processes.map(process => ({ ...process, git: previousGit.get(process.id) }));
+    processes = data.processes.map(process => ({ ...process, git: gitResult?.updates?.[String(process.id)] || previousGit.get(process.id) }));
     $('#connection').textContent = '● Подключено'; $('#connection').className = 'badge online';
     $('#process-error').hidden = true; $('#demo-banner').hidden = !data.demo;
     $('#stat-total').textContent = processes.length;
@@ -119,7 +122,6 @@ async function refresh() {
     $('#updated').textContent = `Обновлено ${new Date().toLocaleTimeString('ru-RU')}`;
     $('#host-info').textContent = `${data.host} · ${data.platform}${data.demo ? ' · DEMO' : ''}`;
     renderProcesses();
-    void refreshGitUpdates(target);
   } catch (error) {
     if (current !== requestId) return;
     connected = false; $('#connection').textContent = 'Нет соединения'; $('#connection').className = 'badge errored';
