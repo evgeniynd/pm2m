@@ -103,10 +103,8 @@ async function refresh() {
   }
   loading = true;
   try {
-    const [data, gitResult] = await Promise.all([
-      api(endpoint('/api/processes', target)),
-      api(endpoint('/api/processes/git-updates', target)).catch(() => null)
-    ]);
+    const data = await api(endpoint('/api/processes', target));
+    const gitResult = await api(endpoint('/api/processes/git-updates', target)).catch(() => null);
     if (current !== requestId || !authenticated) return;
     connected = true;
     const previousGit = new Map(processes.map(process => [process.id, process.git]));
