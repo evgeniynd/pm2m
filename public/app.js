@@ -156,14 +156,15 @@ $('#process-rows').onclick = async event => {
   if (action === 'transfer') {
     const candidates = servers.filter(server => server.id !== target);
     if (!candidates.length) return;
-    const dialog = $('#transfer-dialog'); const form = $('#transfer-form'); const serverSelect = $('#transfer-server'); const pathInput = $('#transfer-path'); const error = $('#transfer-error');
+    const dialog = $('#transfer-dialog'); const form = $('#transfer-form'); const serverSelect = $('#transfer-server'); const pathInput = $('#transfer-path'); const nodeSelect = $('#transfer-node'); const nodeStatus = $('#transfer-node-status'); const error = $('#transfer-error'); let transferVersionsRequest = 0;
     $('#transfer-title').textContent = `Перенести · ${p.name}`;
     serverSelect.innerHTML = candidates.map(server => `<option value="${escape(server.id)}">${escape(server.name)}${server.host ? ` · ${escape(server.host)}` : ''}</option>`).join('');
     const updatePath = () => { const server = candidates.find(item => item.id === serverSelect.value); pathInput.value = server?.appRoot || '/projects'; };
-    serverSelect.onchange = updatePath; updatePath(); error.textContent = ''; dialog.showModal();
+    const loadTransferVersions = async () => { const request = ++transferVersionsRequest; const destinationId = serverSelect.value; nodeSelect.disabled = true; nodeSelect.innerHTML = '<option value="">Проверяем установленные версии…</option>'; nodeStatus.textContent = 'Поиск Node.js на сервере назначения…'; try { const data = await api(endpoint('/api/node-versions', destinationId)); if (request !== transferVersionsRequest) return; nodeSelect.innerHTML = data.versions.length ? data.versions.map(node => `<option value="${escape(node.path)}">${escape(node.version)}${node.default ? ' · по умолчанию' : ''} — ${escape(node.path)}</option>`).join('') : '<option value="">Node.js не найден</option>'; nodeSelect.disabled = !data.versions.length; nodeStatus.textContent = data.versions.length ? `Найдено версий: ${data.versions.length}` : 'На сервере не найдены версии Node.js'; } catch (loadError) { if (request !== transferVersionsRequest) return; nodeSelect.innerHTML = '<option value="">Не удалось получить версии</option>'; nodeStatus.textContent = loadError.message; } };
+    serverSelect.onchange = () => { updatePath(); void loadTransferVersions(); }; updatePath(); error.textContent = ''; dialog.showModal(); void loadTransferVersions();
     const selected = await new Promise(resolve => {
       const finish = value => { form.onsubmit = null; $('#transfer-cancel').onclick = null; $('#transfer-close').onclick = null; dialog.oncancel = null; if (dialog.open) dialog.close(); resolve(value); };
-      form.onsubmit = event => { event.preventDefault(); if (!pathInput.value.trim()) { error.textContent = 'Укажите путь к приложениям'; return; } finish({ id: serverSelect.value, root: pathInput.value.trim() }); };
+      form.onsubmit = event => { event.preventDefault(); if (!pathInput.value.trim()) { error.textContent = 'Укажите путь к приложениям'; return; } if (!nodeSelect.value) { error.textContent = 'Выберите версию Node.js на сервере назначения'; return; } finish({ id: serverSelect.value, root: pathInput.value.trim(), interpreter: nodeSelect.value }); };
       $('#transfer-cancel').onclick = () => finish(null); $('#transfer-close').onclick = () => finish(null); dialog.oncancel = event => { event.preventDefault(); finish(null); };
     });
     const destination = selected && candidates.find(server => server.id === selected.id);
