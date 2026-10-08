@@ -159,7 +159,7 @@ $('#process-rows').onclick = async event => {
     const dialog = $('#transfer-dialog'); const form = $('#transfer-form'); const serverSelect = $('#transfer-server'); const pathInput = $('#transfer-path'); const error = $('#transfer-error');
     $('#transfer-title').textContent = `Перенести · ${p.name}`;
     serverSelect.innerHTML = candidates.map(server => `<option value="${escape(server.id)}">${escape(server.name)}${server.host ? ` · ${escape(server.host)}` : ''}</option>`).join('');
-    const updatePath = () => { const server = candidates.find(item => item.id === serverSelect.value); pathInput.value = server?.appRoot || ''; };
+    const updatePath = () => { const server = candidates.find(item => item.id === serverSelect.value); pathInput.value = server?.appRoot || '/Projects'; };
     serverSelect.onchange = updatePath; updatePath(); error.textContent = ''; dialog.showModal();
     const selected = await new Promise(resolve => {
       const finish = value => { form.onsubmit = null; $('#transfer-cancel').onclick = null; $('#transfer-close').onclick = null; dialog.oncancel = null; if (dialog.open) dialog.close(); resolve(value); };
