@@ -166,8 +166,8 @@ export function createServer({ resolveManager, settings, password, telegram, dem
         const targetRoot = String(body.targetRoot || destination.appRoot || '').trim();
         if (!targetRoot || !targetRoot.startsWith('/') || /[\x00\r\n]/.test(targetRoot)) throw new Error('Укажите абсолютный путь к приложениям на сервере назначения');
         const interpreter = String(body.interpreter || '').trim();
+        if (!interpreter || !interpreter.startsWith('/') || /[\x00\r\n]/.test(interpreter)) throw new Error('Выберите версию Node.js на сервере назначения');
         const destinationManager = await resolveManager(destination);
-        if (!interpreter || !(await destinationManager.nodeVersions()).some(node => node.path === interpreter)) throw new Error('Выбранная версия Node.js недоступна на сервере назначения');
         const moved = await transferSshApplication(target, destination, sourceProcess, targetRoot);
         await destinationManager.start({ name: sourceProcess.name, script: moved.script, cwd: moved.cwd, interpreter });
         const destinationProcess = (await destinationManager.list()).find(item => item.name === sourceProcess.name && item.cwd === moved.cwd);
