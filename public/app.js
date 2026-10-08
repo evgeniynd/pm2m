@@ -63,7 +63,16 @@ function renderProcesses() {
   const filtered = processes.filter(p => p.name.toLowerCase().includes(query) && (status === 'all' || p.status === status));
   $('#process-count').textContent = processes.length;
   $('#process-rows').innerHTML = filtered.map(p => `<tr><td><div class="app-cell"><span class="app-icon">&gt;_</span><div><div class="app-name">${escape(p.name)}</div><div class="app-meta">#${p.id} · ${escape(p.mode === 'cluster_mode' ? 'cluster' : 'fork')} · PID ${p.pid || '—'}</div></div></div></td><td><span class="badge ${['online','stopped','errored'].includes(p.status) ? p.status : 'neutral'}">● &nbsp;${escape(statusName(p.status))}</span></td><td><div class="cpu">${Number(p.cpu).toFixed(1)}%</div><div class="ram">${memory(p.memory)}</div></td><td>${p.status === 'online' ? uptime(p.uptime) : '—'}</td><td>${p.restarts}</td><td><div class="row-actions"><button data-action="logs" data-id="${p.id}" title="Логи">Логи</button><button data-action="update" data-id="${p.id}" title="Обновить из GitHub">↥ Git</button>${p.status === 'online' ? `<button data-action="restart" data-id="${p.id}" title="Перезапустить" aria-label="Перезапустить ${escape(p.name)}">↻</button><button data-action="reload" data-id="${p.id}" title="Reload: плавная перезагрузка в cluster mode">Reload</button><button data-action="stop" data-id="${p.id}" title="Остановить" aria-label="Остановить ${escape(p.name)}">Ⅱ</button>` : `<button data-action="start" data-id="${p.id}" title="Запустить" aria-label="Запустить ${escape(p.name)}">▷</button>`}<button class="delete" data-action="delete" data-id="${p.id}" title="Удалить из PM2" aria-label="Удалить ${escape(p.name)}">×</button></div></td></tr>`).join('');
-  filtered.forEach(p => { const button = document.querySelector(`[data-action="update"][data-id="${p.id}"]`); if (!button) return; const git = p.git; if (!git?.available) { button.dataset.action = 'add-git'; button.textContent = '＋ Git'; button.title = 'Указать URL GitHub-репозитория'; return; } if (git.error) { button.dataset.action = 'add-git'; button.textContent = '↻ Git'; button.title = git.error; return; } if (git.updateAvailable !== true) { button.outerHTML = '<span class="git-current">✓ Актуально</span>'; return; } button.dataset.updateAvailable = 'true'; button.classList.add('git-update'); button.textContent = '↥ Обновить'; button.title = 'Есть обновление из GitHub'; });
+  filtered.forEach(p => {
+    const actions = document.querySelector(`[data-action="logs"][data-id="${p.id}"]`)?.parentElement;
+    if (servers.length > 1 && actions && !actions.querySelector('[data-action="transfer"]')) {
+      const transfer = document.createElement('button');
+      transfer.dataset.action = 'transfer'; transfer.dataset.id = p.id;
+      transfer.textContent = '⇢'; transfer.title = 'Перенести приложение на другой сервер';
+      actions.insertBefore(transfer, actions.firstElementChild);
+    }
+    const button = document.querySelector(`[data-action="update"][data-id="${p.id}"]`); if (!button) return; const git = p.git; if (!git?.available) { button.dataset.action = 'add-git'; button.textContent = '＋ Git'; button.title = 'Указать URL GitHub-репозитория'; return; } if (git.error) { button.dataset.action = 'add-git'; button.textContent = '↻ Git'; button.title = git.error; return; } if (git.updateAvailable !== true) { button.outerHTML = '<span class="git-current">✓ Актуально</span>'; return; } button.dataset.updateAvailable = 'true'; button.classList.add('git-update'); button.textContent = '↥ Обновить'; button.title = 'Есть обновление из GitHub';
+  });
   $('#empty-state').hidden = filtered.length > 0;
   updateControls();
 }
@@ -141,6 +150,19 @@ $('#process-rows').onclick = async event => {
   const id = Number(button.dataset.id), action = button.dataset.action, target = selected;
   const p = processes.find(p => p.id === id); if (!p) return;
   if (action === 'logs') { logTarget = { id, server: target }; logStream = 'stdout'; logData = {}; $('#logs-title').textContent = p.name; $('#log-output').textContent = 'Загрузка…'; $('#log-analysis').hidden = true; $('#log-analysis').textContent = ''; $('#logs-dialog').showModal(); setLogStream('stdout'); await refreshLogs(); return; }
+  if (action === 'transfer') {
+    const candidates = servers.filter(server => server.id !== target);
+    if (!candidates.length) return;
+    const choices = candidates.map((server, index) => `${index + 1}. ${server.name}`).join('\n');
+    const choice = prompt(`Перенести «${p.name}» на сервер:\n${choices}\n\nВведите номер сервера:`, '1');
+    const destination = candidates[Number(choice) - 1];
+    if (!destination) return;
+    if (!confirm(`Перенести «${p.name}» на сервер «${destination.name}»? Приложение будет удалено с текущего сервера.`)) return;
+    busy = true; updateControls();
+    try { await api(endpoint(`/api/processes/${id}/transfer`, target), { targetServer: destination.id }); toast(`Приложение перенесено на «${destination.name}»`); await loadServers(); await refresh(); }
+    catch (error) { toast(error.message, true); } finally { busy = false; updateControls(); }
+    return;
+  }
   if (action === 'add-git') {
     const repository = prompt(`URL GitHub-репозитория для «${p.name}» на сервере «${servers.find(s => s.id === target)?.name}»:`, 'https://github.com/owner/repository.git');
     if (!repository?.trim()) return;

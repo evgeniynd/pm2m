@@ -11,6 +11,7 @@ import { createSshManager, probeHost } from './lib/ssh.js';
 import { createSessionStore, memorySessions, COOKIE_MAX_AGE } from './lib/sessions.js';
 import { createTelegram } from './lib/telegram.js';
 import { analyzeGroq, redact } from './lib/ai.js';
+import { transferSshApplication } from './lib/transfer.js';
 
 const digest = value => createHash('sha256').update(value).digest();
 async function githubJson(url, options = {}) {
@@ -154,6 +155,22 @@ export function createServer({ resolveManager, settings, password, telegram, dem
         if (config.repository) await manager.installRepository(config.repository, config.destination, config.branch, { token: settings.github(true).token });
         const { repository, destination, branch, ...startConfig } = config;
         await manager.start(startConfig); return send(201, { ok: true });
+      }
+      const transferMatch = /^\/api\/processes\/(\d+)\/transfer$/.exec(url.pathname);
+      if (req.method === 'POST' && transferMatch) {
+        const processId = Number(transferMatch[1]); const targetId = String(body.targetServer || '');
+        if (!targetId || targetId === target.id) throw new Error('Выберите другой сервер назначения');
+        const destination = settings.get(targetId); const sourceProcess = (await manager.list()).find(item => item.id === processId);
+        if (!sourceProcess) throw new Error('Процесс не найден');
+        const moved = await transferSshApplication(target, destination, sourceProcess, destination.appRoot || '/Projects');
+        const destinationManager = await resolveManager(destination);
+        await destinationManager.start({ name: sourceProcess.name, script: moved.script, cwd: moved.cwd, ...(sourceProcess.interpreter ? { interpreter: sourceProcess.interpreter } : {}) });
+        if (sourceProcess.status !== 'online') {
+          const destinationProcess = (await destinationManager.list()).find(item => item.name === sourceProcess.name);
+          if (destinationProcess) await destinationManager.action(destinationProcess.id, 'stop');
+        }
+        await manager.action(processId, 'delete');
+        return send(200, { ok: true, server: destination.name });
       }
       if (req.method === 'POST' && url.pathname === '/api/save') { await manager.save(); return send(200, { ok: true }); }
       const match = /^\/api\/processes\/(\d+)\/(start|stop|restart|reload|delete|update|logs)$/.exec(url.pathname);
