@@ -2,6 +2,7 @@
 .mobile-only{display:none}@media(max-width:760px){.mobile-only{display:inline-block}.admin .avatar{display:none}}
 #node-version-status{font-size:12px;margin-top:10px;overflow-wrap:anywhere}#node-version{font-size:12px}
 .spinner{display:inline-block;width:30px;height:30px;border:3px solid #3b4152;border-top-color:var(--accent);border-radius:50%;animation:pm2m-spin .8s linear infinite}@keyframes pm2m-spin{to{transform:rotate(360deg)}}.operation-dialog{width:min(320px,calc(100% - 32px));text-align:center}.operation-progress{display:flex;flex-direction:column;align-items:center;gap:18px;padding:14px}.operation-progress p{color:#c9cede;font-size:13px}.git-update-status.loading{display:flex;align-items:center;justify-content:center;min-height:120px;gap:10px}.git-update-status.loading::before{content:"";display:inline-block;width:22px;height:22px;flex:0 0 22px;border:3px solid #454b5c;border-top-color:var(--accent);border-radius:50%;animation:pm2m-spin .8s linear infinite}
+.mini-spinner{display:inline-block;width:12px;height:12px;border:2px solid #535b6e;border-top-color:var(--accent);border-radius:50%;animation:pm2m-spin .8s linear infinite;vertical-align:-2px}.row-actions .git-loading{min-width:54px;display:inline-flex;justify-content:center;align-items:center}
 
 .telegram-settings { margin-top: 24px; max-width: 800px; }
 .telegram-settings input:not([type="checkbox"]) { width: 100%; min-width: 0; }

@@ -71,7 +71,7 @@ function renderProcesses() {
       transfer.textContent = '⇢'; transfer.title = 'Перенести приложение на другой сервер';
       actions.insertBefore(transfer, actions.firstElementChild);
     }
-    const button = document.querySelector(`[data-action="update"][data-id="${p.id}"]`); if (!button) return; const git = p.git; if (!git?.available) { button.dataset.action = 'add-git'; button.textContent = '＋ Git'; button.title = 'Указать URL GitHub-репозитория'; return; } if (git.error) { button.dataset.action = 'add-git'; button.textContent = '↻ Git'; button.title = git.error; return; } if (git.updateAvailable !== true) { button.outerHTML = '<span class="git-current">✓ Актуально</span>'; return; } button.dataset.updateAvailable = 'true'; button.classList.add('git-update'); button.textContent = '↥ Обновить'; button.title = 'Есть обновление из GitHub';
+    const button = document.querySelector(`[data-action="update"][data-id="${p.id}"]`); if (!button) return; if (gitLoading) { button.classList.add('git-loading'); button.innerHTML = '<span class="mini-spinner" aria-label="Проверка Git"></span>'; button.title = 'Проверяем Git…'; return; } const git = p.git; if (!git?.available) { button.dataset.action = 'add-git'; button.textContent = '＋ Git'; button.title = 'Указать URL GitHub-репозитория'; return; } if (git.error) { button.dataset.action = 'add-git'; button.textContent = '↻ Git'; button.title = git.error; return; } if (git.updateAvailable !== true) { button.outerHTML = '<span class="git-current">✓ Актуально</span>'; return; } button.dataset.updateAvailable = 'true'; button.classList.add('git-update'); button.textContent = '↥ Обновить'; button.title = 'Есть обновление из GitHub';
   });
   $('#empty-state').hidden = filtered.length > 0;
   updateControls();
@@ -86,11 +86,12 @@ function hideOperation() { const dialog = $('#operation-dialog'); if (dialog.ope
 async function refreshGitUpdates(target = selected) {
   if (!authenticated || !connected || gitLoading || target !== selected) return;
   gitLoading = true;
+  renderProcesses();
   try {
     const { updates } = await api(endpoint('/api/processes/git-updates', target));
     if (target !== selected) return;
     processes = processes.map(p => ({ ...p, git: updates[String(p.id)] || undefined })); renderProcesses();
-  } catch {} finally { gitLoading = false; }
+  } catch {} finally { gitLoading = false; if (target === selected) renderProcesses(); }
 }
 async function refresh() {
   const current = ++requestId; const target = selected;
@@ -104,11 +105,10 @@ async function refresh() {
   loading = true;
   try {
     const data = await api(endpoint('/api/processes', target));
-    const gitResult = await api(endpoint('/api/processes/git-updates', target)).catch(() => null);
     if (current !== requestId || !authenticated) return;
     connected = true;
     const previousGit = new Map(processes.map(process => [process.id, process.git]));
-    processes = data.processes.map(process => ({ ...process, git: gitResult?.updates?.[String(process.id)] || previousGit.get(process.id) }));
+    processes = data.processes.map(process => ({ ...process, git: previousGit.get(process.id) }));
     $('#connection').textContent = '● Подключено'; $('#connection').className = 'badge online';
     $('#process-error').hidden = true; $('#demo-banner').hidden = !data.demo;
     $('#stat-total').textContent = processes.length;
@@ -120,6 +120,7 @@ async function refresh() {
     $('#updated').textContent = `Обновлено ${new Date().toLocaleTimeString('ru-RU')}`;
     $('#host-info').textContent = `${data.host} · ${data.platform}${data.demo ? ' · DEMO' : ''}`;
     renderProcesses();
+    void refreshGitUpdates(target);
   } catch (error) {
     if (current !== requestId) return;
     connected = false; $('#connection').textContent = 'Нет соединения'; $('#connection').className = 'badge errored';
