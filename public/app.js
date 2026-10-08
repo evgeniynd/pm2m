@@ -165,7 +165,9 @@ $('#process-rows').onclick = async event => {
       const approved = await new Promise(resolve => { const finish = value => { confirmButton.onclick = null; cancelButton.onclick = null; resolve(value); }; confirmButton.onclick = () => finish(true); cancelButton.onclick = () => finish(false); });
       if (!approved) return;
       confirmButton.disabled = true; cancelButton.disabled = true; $('#git-update-status').textContent = 'Устанавливаем изменения и перезапускаем приложение…';
-      await api(endpoint(`/api/processes/${id}/update`, target), {}); toast('Приложение обновлено'); await refresh();
+      await api(endpoint(`/api/processes/${id}/update`, target), {});
+      processes = processes.map(item => item.id === id ? { ...item, git: { ...(item.git || {}), available: true, updateAvailable: false, error: undefined } } : item);
+      renderProcesses(); toast('Приложение обновлено'); await refresh();
     } catch (error) { toast(error.message, true); } finally { if (dialog.open) dialog.close(); dialog.oncancel = null; busy = false; updateControls(); }
     return;
   }
