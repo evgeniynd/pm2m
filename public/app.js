@@ -81,6 +81,8 @@ function updateControls() {
   $('#save-processes').disabled = !connected || busy;
   document.querySelectorAll('[data-action]').forEach(button => { button.disabled = !connected || busy || (button.dataset.action === 'update' && button.dataset.updateAvailable !== 'true'); });
 }
+function showOperation(message) { $('#operation-message').textContent = message; const dialog = $('#operation-dialog'); if (!dialog.open) dialog.showModal(); }
+function hideOperation() { const dialog = $('#operation-dialog'); if (dialog.open) dialog.close(); }
 async function refreshGitUpdates(target = selected) {
   if (!authenticated || !connected || gitLoading || target !== selected) return;
   gitLoading = true;
@@ -166,8 +168,8 @@ $('#process-rows').onclick = async event => {
     const destination = selected && candidates.find(server => server.id === selected.id);
     if (!destination) return;
     busy = true; updateControls();
-    try { await api(endpoint(`/api/processes/${id}/transfer`, target), { targetServer: destination.id, targetRoot: selected.root }); toast(`Приложение перенесено на «${destination.name}»`); await loadServers(); await refresh(); }
-    catch (error) { toast(error.message, true); } finally { busy = false; updateControls(); }
+    try { showOperation(`Переносим «${p.name}» на «${destination.name}»…`); await api(endpoint(`/api/processes/${id}/transfer`, target), { targetServer: destination.id, targetRoot: selected.root }); toast(`Приложение перенесено на «${destination.name}»`); await loadServers(); await refresh(); }
+    catch (error) { toast(error.message, true); } finally { hideOperation(); busy = false; updateControls(); }
     return;
   }
   if (action === 'add-git') {
@@ -181,23 +183,23 @@ $('#process-rows').onclick = async event => {
   if (action === 'update') {
     busy = true; updateControls();
     const dialog = $('#git-update-dialog'); const confirmButton = $('#git-update-confirm'); const cancelButton = $('#git-update-cancel');
-    $('#git-update-title').textContent = `Обновление · ${p.name}`; $('#git-update-status').textContent = 'Получаем список изменений…'; $('#git-update-changes').hidden = true; $('#git-update-changes').textContent = ''; confirmButton.disabled = true; cancelButton.disabled = false; dialog.oncancel = event => event.preventDefault(); dialog.showModal();
+    $('#git-update-title').textContent = `Обновление · ${p.name}`; $('#git-update-status').textContent = 'Получаем список изменений…'; $('#git-update-status').classList.add('loading'); $('#git-update-changes').hidden = true; $('#git-update-changes').textContent = ''; confirmButton.disabled = true; cancelButton.disabled = false; dialog.oncancel = event => event.preventDefault(); dialog.showModal();
     try {
       const data = await api(endpoint(`/api/processes/${id}/git-changes`, target));
       if (data.error) throw new Error(data.error);
-      if (!data.commits?.length) { $('#git-update-status').textContent = 'Новых коммитов не найдено.'; await new Promise(resolve => setTimeout(resolve, 1200)); return; }
+      if (!data.commits?.length) { $('#git-update-status').classList.remove('loading'); $('#git-update-status').textContent = 'Новых коммитов не найдено.'; await new Promise(resolve => setTimeout(resolve, 1200)); return; }
       const changes = data.commits.map(commit => {
         const date = commit.date ? new Date(commit.date).toLocaleString('ru-RU') : '';
         return `• ${commit.subject || 'Без сообщения'}\n  ${commit.hash || ''} · ${commit.author || 'Неизвестный автор'}${date ? ` · ${date}` : ''}`;
       }).join('\n');
-      $('#git-update-status').textContent = 'Проверьте изменения перед обновлением.'; $('#git-update-changes').textContent = changes; $('#git-update-changes').hidden = false; confirmButton.disabled = false;
+      $('#git-update-status').classList.remove('loading'); $('#git-update-status').textContent = 'Проверьте изменения перед обновлением.'; $('#git-update-changes').textContent = changes; $('#git-update-changes').hidden = false; confirmButton.disabled = false;
       const approved = await new Promise(resolve => { const finish = value => { confirmButton.onclick = null; cancelButton.onclick = null; resolve(value); }; confirmButton.onclick = () => finish(true); cancelButton.onclick = () => finish(false); });
       if (!approved) return;
-      confirmButton.disabled = true; cancelButton.disabled = true; $('#git-update-status').textContent = 'Устанавливаем изменения и перезапускаем приложение…';
+      confirmButton.disabled = true; cancelButton.disabled = true; $('#git-update-status').textContent = 'Устанавливаем изменения и перезапускаем приложение…'; $('#git-update-status').classList.add('loading');
       await api(endpoint(`/api/processes/${id}/update`, target), {});
       processes = processes.map(item => item.id === id ? { ...item, git: { ...(item.git || {}), available: true, updateAvailable: false, error: undefined } } : item);
       renderProcesses(); toast('Приложение обновлено'); await refresh();
-    } catch (error) { toast(error.message, true); } finally { if (dialog.open) dialog.close(); dialog.oncancel = null; busy = false; updateControls(); }
+    } catch (error) { toast(error.message, true); } finally { $('#git-update-status').classList.remove('loading'); if (dialog.open) dialog.close(); dialog.oncancel = null; busy = false; updateControls(); }
     return;
   }
   const verbs = { update: 'Обновить из GitHub', stop: 'Остановить', restart: 'Перезапустить', reload: 'Перезагрузить', delete: 'Удалить из PM2' };
