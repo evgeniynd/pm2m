@@ -162,7 +162,9 @@ export function createServer({ resolveManager, settings, password, telegram, dem
         if (!targetId || targetId === target.id) throw new Error('Выберите другой сервер назначения');
         const destination = settings.get(targetId); const sourceProcess = (await manager.list()).find(item => item.id === processId);
         if (!sourceProcess) throw new Error('Процесс не найден');
-        const moved = await transferSshApplication(target, destination, sourceProcess, destination.appRoot || '/Projects');
+        const targetRoot = String(body.targetRoot || destination.appRoot || '').trim();
+        if (!targetRoot || !targetRoot.startsWith('/') || /[\x00\r\n]/.test(targetRoot)) throw new Error('Укажите абсолютный путь к приложениям на сервере назначения');
+        const moved = await transferSshApplication(target, destination, sourceProcess, targetRoot);
         const destinationManager = await resolveManager(destination);
         await destinationManager.start({ name: sourceProcess.name, script: moved.script, cwd: moved.cwd, ...(sourceProcess.interpreter ? { interpreter: sourceProcess.interpreter } : {}) });
         if (sourceProcess.status !== 'online') {

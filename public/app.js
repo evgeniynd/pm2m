@@ -56,7 +56,7 @@ async function loadServers() {
   renderServers();
 }
 function renderServers() {
-  $('#server-cards').innerHTML = servers.length ? servers.map(s => `<article class="server-card"><h2>${escape(s.name)}</h2><span class="badge neutral">${s.type === 'ssh' ? 'SSH · Linux' : 'Локальный PM2'}</span><p>${s.type === 'ssh' ? `${escape(s.username)}@${escape(s.host)}:${s.port}<br>${s.auth === 'key' ? 'Вход по ключу' : 'Вход по паролю'} · PM2: ${escape(s.pm2Path)}` : 'Пользователь и окружение панели'}<br>Приложения: ${escape(s.appRoot || '/Projects')}</p><div class="card-actions"><button data-server-action="open" data-id="${s.id}">Открыть →</button><button data-server-action="test" data-id="${s.id}">Проверить</button><button data-server-action="edit" data-id="${s.id}">Изменить</button><button data-server-action="delete" data-id="${s.id}">Удалить</button></div></article>`).join('') : '<div class="empty"><strong>Добавьте первый сервер</strong><p>Выберите локальный PM2 или подключение по SSH.</p></div>';
+  $('#server-cards').innerHTML = servers.length ? servers.map(s => `<article class="server-card"><h2>${escape(s.name)}</h2><span class="badge neutral">${s.type === 'ssh' ? 'SSH · Linux' : 'Локальный PM2'}</span><p>${s.type === 'ssh' ? `${escape(s.username)}@${escape(s.host)}:${s.port}<br>${s.auth === 'key' ? 'Вход по ключу' : 'Вход по паролю'} · PM2: ${escape(s.pm2Path)}` : 'Пользователь и окружение панели'}<br>Приложения: ${escape(s.appRoot || 'Путь не задан')}</p><div class="card-actions"><button data-server-action="open" data-id="${s.id}">Открыть →</button><button data-server-action="test" data-id="${s.id}">Проверить</button><button data-server-action="edit" data-id="${s.id}">Изменить</button><button data-server-action="delete" data-id="${s.id}">Удалить</button></div></article>`).join('') : '<div class="empty"><strong>Добавьте первый сервер</strong><p>Выберите локальный PM2 или подключение по SSH.</p></div>';
 }
 function renderProcesses() {
   const query = $('#search').value.toLowerCase(); const status = $('#status-filter').value;
@@ -159,7 +159,9 @@ $('#process-rows').onclick = async event => {
     if (!destination) return;
     if (!confirm(`Перенести «${p.name}» на сервер «${destination.name}»? Приложение будет удалено с текущего сервера.`)) return;
     busy = true; updateControls();
-    try { await api(endpoint(`/api/processes/${id}/transfer`, target), { targetServer: destination.id }); toast(`Приложение перенесено на «${destination.name}»`); await loadServers(); await refresh(); }
+    let targetRoot = destination.appRoot?.trim();
+    if (!targetRoot) { targetRoot = prompt(`На сервере «${destination.name}» не задан путь к приложениям. Укажите путь:`, '/Projects')?.trim(); if (!targetRoot) return; }
+    try { await api(endpoint(`/api/processes/${id}/transfer`, target), { targetServer: destination.id, targetRoot }); toast(`Приложение перенесено на «${destination.name}»`); await loadServers(); await refresh(); }
     catch (error) { toast(error.message, true); } finally { busy = false; updateControls(); }
     return;
   }
