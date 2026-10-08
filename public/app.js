@@ -3,7 +3,7 @@ const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': 
 let servers = [], processes = [], selected = localStorage.getItem('pm2m-server') || 'local';
 let authenticated = false, connected = false, requestId = 0, busy = false, loading = false, gitLoading = false;
 let logTarget = null, logStream = 'stdout', logData = {}, logLoading = false, toastTimer;
-let processTarget = null, versionsRequest = 0, versionsLoading = false;
+let processTarget = null, versionsRequest = 0, versionsLoading = false, autoAppPath = '';
 
 async function api(path, body) {
   const response = await fetch(path, { method: body === undefined ? 'GET' : 'POST',
@@ -56,7 +56,7 @@ async function loadServers() {
   renderServers();
 }
 function renderServers() {
-  $('#server-cards').innerHTML = servers.length ? servers.map(s => `<article class="server-card"><h2>${escape(s.name)}</h2><span class="badge neutral">${s.type === 'ssh' ? 'SSH · Linux' : 'Локальный PM2'}</span><p>${s.type === 'ssh' ? `${escape(s.username)}@${escape(s.host)}:${s.port}<br>${s.auth === 'key' ? 'Вход по ключу' : 'Вход по паролю'} · PM2: ${escape(s.pm2Path)}` : 'Пользователь и окружение панели'}</p><div class="card-actions"><button data-server-action="open" data-id="${s.id}">Открыть →</button><button data-server-action="test" data-id="${s.id}">Проверить</button><button data-server-action="edit" data-id="${s.id}">Изменить</button><button data-server-action="delete" data-id="${s.id}">Удалить</button></div></article>`).join('') : '<div class="empty"><strong>Добавьте первый сервер</strong><p>Выберите локальный PM2 или подключение по SSH.</p></div>';
+  $('#server-cards').innerHTML = servers.length ? servers.map(s => `<article class="server-card"><h2>${escape(s.name)}</h2><span class="badge neutral">${s.type === 'ssh' ? 'SSH · Linux' : 'Локальный PM2'}</span><p>${s.type === 'ssh' ? `${escape(s.username)}@${escape(s.host)}:${s.port}<br>${s.auth === 'key' ? 'Вход по ключу' : 'Вход по паролю'} · PM2: ${escape(s.pm2Path)}` : 'Пользователь и окружение панели'}<br>Приложения: ${escape(s.appRoot || '/Projects')}</p><div class="card-actions"><button data-server-action="open" data-id="${s.id}">Открыть →</button><button data-server-action="test" data-id="${s.id}">Проверить</button><button data-server-action="edit" data-id="${s.id}">Изменить</button><button data-server-action="delete" data-id="${s.id}">Удалить</button></div></article>`).join('') : '<div class="empty"><strong>Добавьте первый сервер</strong><p>Выберите локальный PM2 или подключение по SSH.</p></div>';
 }
 function renderProcesses() {
   const query = $('#search').value.toLowerCase(); const status = $('#status-filter').value;
@@ -205,7 +205,7 @@ async function loadNodeVersions() {
   }
 }
 $('#add-process').onclick = () => {
-  processTarget = selected; $('#process-form').reset(); $('#process-form .error').textContent = '';
+  processTarget = selected; autoAppPath = ''; $('#process-form').reset(); $('#process-form .error').textContent = '';
   $('#process-target').textContent = `Сервер: ${servers.find(s => s.id === processTarget)?.name}. Все пути относятся к этому серверу.`;
   $('#process-dialog').showModal(); loadNodeVersions();
 };
@@ -232,6 +232,7 @@ function serverFields() {
 }
 function editServer(server) {
   const form = $('#server-form'); form.reset(); form.querySelector('.error').textContent = '';
+  form.elements.appRoot.value = server?.appRoot || '/Projects';
   if (server) for (const [key, value] of Object.entries(server)) if (form.elements.namedItem(key)) form.elements.namedItem(key).value = value;
   $('#server-dialog-title').textContent = server ? 'Изменить сервер' : 'Добавить сервер'; serverFields(); $('#server-dialog').showModal();
 }
@@ -280,6 +281,13 @@ $('#analyze-log').onclick = async () => {
   } catch (error) { output.textContent = `Не удалось выполнить анализ\n\n${error.message}`; }
   finally { button.textContent = '🔎 Проанализировать'; setLogStream(logStream); }
 };
+$('#process-form').elements.name.addEventListener('input', event => {
+  const root = servers.find(server => server.id === processTarget)?.appRoot || '/Projects'; const separator = root.includes('\\') ? '\\' : '/'; const next = `${root.replace(/[\\/]+$/, '')}${separator}${event.target.value.trim()}`;
+  const destination = $('#process-form').elements.destination; const cwd = $('#process-form').elements.cwd;
+  if (!destination.value || destination.value === autoAppPath) destination.value = next;
+  if (!cwd.value || cwd.value === autoAppPath) cwd.value = next;
+  autoAppPath = next;
+});
 async function refreshLogs() {
   if (!logTarget || logLoading) return;
   const target = logTarget; logLoading = true;
