@@ -159,7 +159,7 @@ $('#process-rows').onclick = async event => {
     const dialog = $('#transfer-dialog'); const form = $('#transfer-form'); const serverSelect = $('#transfer-server'); const pathInput = $('#transfer-path'); const error = $('#transfer-error');
     $('#transfer-title').textContent = `Перенести · ${p.name}`;
     serverSelect.innerHTML = candidates.map(server => `<option value="${escape(server.id)}">${escape(server.name)}${server.host ? ` · ${escape(server.host)}` : ''}</option>`).join('');
-    const updatePath = () => { const server = candidates.find(item => item.id === serverSelect.value); pathInput.value = server?.appRoot || '/Projects'; };
+    const updatePath = () => { const server = candidates.find(item => item.id === serverSelect.value); pathInput.value = server?.appRoot || '/projects'; };
     serverSelect.onchange = updatePath; updatePath(); error.textContent = ''; dialog.showModal();
     const selected = await new Promise(resolve => {
       const finish = value => { form.onsubmit = null; $('#transfer-cancel').onclick = null; $('#transfer-close').onclick = null; dialog.oncancel = null; if (dialog.open) dialog.close(); resolve(value); };
@@ -264,7 +264,7 @@ function serverFields() {
 }
 function editServer(server) {
   const form = $('#server-form'); form.reset(); form.querySelector('.error').textContent = '';
-  form.elements.appRoot.value = server?.appRoot || '/Projects';
+  form.elements.appRoot.value = server?.appRoot || '/projects';
   if (server) for (const [key, value] of Object.entries(server)) if (form.elements.namedItem(key)) form.elements.namedItem(key).value = value;
   $('#server-dialog-title').textContent = server ? 'Изменить сервер' : 'Добавить сервер'; serverFields(); $('#server-dialog').showModal();
 }
@@ -314,7 +314,7 @@ $('#analyze-log').onclick = async () => {
   finally { button.textContent = '🔎 Проанализировать'; setLogStream(logStream); }
 };
 $('#process-form').elements.name.addEventListener('input', event => {
-  const root = servers.find(server => server.id === processTarget)?.appRoot || '/Projects'; const separator = root.includes('\\') ? '\\' : '/'; const next = `${root.replace(/[\\/]+$/, '')}${separator}${event.target.value.trim()}`;
+  const root = servers.find(server => server.id === processTarget)?.appRoot || '/projects'; const separator = root.includes('\\') ? '\\' : '/'; const next = `${root.replace(/[\\/]+$/, '')}${separator}${event.target.value.trim()}`;
   const destination = $('#process-form').elements.destination; const cwd = $('#process-form').elements.cwd; const script = $('#process-form').elements.script; const nextScript = `${next}${separator}index.js`;
   if (!destination.value || destination.value === autoAppPath) destination.value = next;
   if (!cwd.value || cwd.value === autoAppPath) cwd.value = next;
