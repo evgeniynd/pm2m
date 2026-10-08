@@ -3,7 +3,7 @@ const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': 
 let servers = [], processes = [], selected = localStorage.getItem('pm2m-server') || 'local';
 let authenticated = false, connected = false, requestId = 0, busy = false, loading = false, gitLoading = false, gitInitialLoading = false, gitReady = false;
 let logTarget = null, logStream = 'stdout', logData = {}, logLoading = false, toastTimer;
-let processTarget = null, versionsRequest = 0, versionsLoading = false, autoAppPath = '', autoScriptPath = '';
+let processTarget = null, processEditId = null, editInterpreter = '', versionsRequest = 0, versionsLoading = false, autoAppPath = '', autoScriptPath = '';
 
 async function api(path, body) {
   const response = await fetch(path, { method: body === undefined ? 'GET' : 'POST',
@@ -62,7 +62,7 @@ function renderProcesses() {
   const query = $('#search').value.toLowerCase(); const status = $('#status-filter').value;
   const filtered = processes.filter(p => p.name.toLowerCase().includes(query) && (status === 'all' || p.status === status));
   $('#process-count').textContent = processes.length;
-  $('#process-rows').innerHTML = filtered.map(p => `<tr><td><div class="app-cell"><span class="app-icon">&gt;_</span><div><div class="app-name">${escape(p.name)}</div><div class="app-meta">#${p.id} · ${escape(p.mode === 'cluster_mode' ? 'cluster' : 'fork')} · PID ${p.pid || '—'}</div></div></div></td><td><span class="badge ${['online','stopped','errored'].includes(p.status) ? p.status : 'neutral'}">● &nbsp;${escape(statusName(p.status))}</span></td><td><div class="cpu">${Number(p.cpu).toFixed(1)}%</div><div class="ram">${memory(p.memory)}</div></td><td>${p.status === 'online' ? uptime(p.uptime) : '—'}</td><td>${p.restarts}</td><td><div class="row-actions"><button data-action="logs" data-id="${p.id}" title="Логи">Логи</button><button data-action="update" data-id="${p.id}" title="Обновить из GitHub">↥ Git</button>${p.status === 'online' ? `<button data-action="restart" data-id="${p.id}" title="Перезапустить" aria-label="Перезапустить ${escape(p.name)}">↻</button><button data-action="reload" data-id="${p.id}" title="Reload: плавная перезагрузка в cluster mode">Reload</button><button data-action="stop" data-id="${p.id}" title="Остановить" aria-label="Остановить ${escape(p.name)}">Ⅱ</button>` : `<button data-action="start" data-id="${p.id}" title="Запустить" aria-label="Запустить ${escape(p.name)}">▷</button>`}<button class="delete" data-action="delete" data-id="${p.id}" title="Удалить из PM2" aria-label="Удалить ${escape(p.name)}">×</button></div></td></tr>`).join('');
+  $('#process-rows').innerHTML = filtered.map(p => `<tr><td><div class="app-cell"><span class="app-icon">&gt;_</span><div><div class="app-name">${escape(p.name)}</div><div class="app-meta">#${p.id} · ${escape(p.mode === 'cluster_mode' ? 'cluster' : 'fork')} · PID ${p.pid || '—'}</div></div></div></td><td><span class="badge ${['online','stopped','errored'].includes(p.status) ? p.status : 'neutral'}">● &nbsp;${escape(statusName(p.status))}</span></td><td><div class="cpu">${Number(p.cpu).toFixed(1)}%</div><div class="ram">${memory(p.memory)}</div></td><td>${p.status === 'online' ? uptime(p.uptime) : '—'}</td><td>${p.restarts}</td><td><div class="row-actions"><button data-action="edit" data-id="${p.id}" title="Редактировать">✎</button><button data-action="logs" data-id="${p.id}" title="Логи">Логи</button><button data-action="update" data-id="${p.id}" title="Обновить из GitHub">↥ Git</button>${p.status === 'online' ? `<button data-action="restart" data-id="${p.id}" title="Перезапустить" aria-label="Перезапустить ${escape(p.name)}">↻</button><button data-action="reload" data-id="${p.id}" title="Reload: плавная перезагрузка в cluster mode">Reload</button><button data-action="stop" data-id="${p.id}" title="Остановить" aria-label="Остановить ${escape(p.name)}">Ⅱ</button>` : `<button data-action="start" data-id="${p.id}" title="Запустить" aria-label="Запустить ${escape(p.name)}">▷</button>`}<button class="delete" data-action="delete" data-id="${p.id}" title="Удалить из PM2" aria-label="Удалить ${escape(p.name)}">×</button></div></td></tr>`).join('');
   filtered.forEach(p => {
     const actions = document.querySelector(`[data-action="logs"][data-id="${p.id}"]`)?.parentElement;
     if (servers.length > 1 && actions && !actions.querySelector('[data-action="transfer"]')) {
@@ -152,6 +152,10 @@ $('#process-rows').onclick = async event => {
   const button = event.target.closest('[data-action]'); if (!button || busy) return;
   const id = Number(button.dataset.id), action = button.dataset.action, target = selected;
   const p = processes.find(p => p.id === id); if (!p) return;
+  if (action === 'edit') {
+    processTarget = target; processEditId = id; editInterpreter = p.interpreter || ''; autoAppPath = p.cwd; autoScriptPath = p.script;
+    const form = $('#process-form'); form.reset(); form.elements.name.value = p.name; form.elements.script.value = p.script || ''; form.elements.cwd.value = p.cwd || ''; $('#process-dialog-title').textContent = `Редактировать · ${p.name}`; $('#start-process').textContent = 'Сохранить изменения'; $('.github-source').open = false; $('.github-source').hidden = true; $('#process-target').textContent = `Сервер: ${servers.find(s => s.id === target)?.name}.`; $('#process-dialog').showModal(); loadNodeVersions(); return;
+  }
   if (action === 'logs') { logTarget = { id, server: target }; logStream = 'stdout'; logData = {}; $('#logs-title').textContent = p.name; $('#log-output').textContent = 'Загрузка…'; $('#log-analysis').hidden = true; $('#log-analysis').textContent = ''; $('#logs-dialog').showModal(); setLogStream('stdout'); await refreshLogs(); return; }
   if (action === 'transfer') {
     const candidates = servers.filter(server => server.id !== target);
@@ -218,7 +222,7 @@ $('#save-processes').onclick = async () => {
 };
 async function loadNodeVersions() {
   const target = processTarget; const request = ++versionsRequest;
-  const select = $('#node-version'); const previous = select.value;
+  const select = $('#node-version'); const previous = editInterpreter || select.value;
   versionsLoading = true; select.disabled = true; $('#start-process').disabled = true; $('#reload-node-versions').disabled = true;
   select.innerHTML = '<option value="">Проверяем установленные версии…</option>';
   $('#node-version-status').textContent = 'Поиск Node.js на выбранном сервере…';
@@ -238,12 +242,12 @@ async function loadNodeVersions() {
   }
 }
 $('#add-process').onclick = () => {
-  processTarget = selected; autoAppPath = ''; autoScriptPath = ''; $('#process-form').reset(); $('#process-form .error').textContent = '';
+  processTarget = selected; processEditId = null; editInterpreter = ''; autoAppPath = ''; autoScriptPath = ''; $('#process-form').reset(); $('#process-form .error').textContent = ''; $('#process-dialog-title').textContent = 'Новое приложение'; $('#start-process').textContent = 'Запустить приложение'; $('.github-source').hidden = false;
   $('#process-target').textContent = `Сервер: ${servers.find(s => s.id === processTarget)?.name}. Все пути относятся к этому серверу.`;
   $('#process-dialog').showModal(); loadNodeVersions();
 };
 $('#reload-node-versions').onclick = loadNodeVersions;
-$('#process-dialog').addEventListener('close', () => { processTarget = null; versionsRequest++; });
+$('#process-dialog').addEventListener('close', () => { processTarget = null; processEditId = null; editInterpreter = ''; versionsRequest++; $('.github-source').hidden = false; });
 function formData(form) { return Object.fromEntries(new FormData(form)); }
 async function submitForm(event, work) {
   event.preventDefault(); const form = event.target; const button = event.submitter; button.disabled = true; form.querySelector('.error').textContent = '';
@@ -255,7 +259,7 @@ $('#process-form').onsubmit = event => {
   const target = processTarget;
   return submitForm(event, async data => {
     $('#reload-node-versions').disabled = true;
-    try { await api(endpoint('/api/processes', target), data); toast('Приложение запущено'); await refresh(); }
+    try { await api(endpoint(processEditId ? `/api/processes/${processEditId}/edit` : '/api/processes', target), data); toast(processEditId ? 'Параметры приложения сохранены' : 'Приложение запущено'); await refresh(); }
     finally { $('#reload-node-versions').disabled = false; }
   });
 };

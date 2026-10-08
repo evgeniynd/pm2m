@@ -156,6 +156,13 @@ export function createServer({ resolveManager, settings, password, telegram, dem
         const { repository, destination, branch, ...startConfig } = config;
         await manager.start(startConfig); return send(201, { ok: true });
       }
+      const editMatch = /^\/api\/processes\/(\d+)\/edit$/.exec(url.pathname);
+      if (req.method === 'POST' && editMatch) {
+        const config = validateStart(body, target.type === 'ssh' ? path.posix : path);
+        if (config.repository) throw new Error('Git-установку нельзя менять при редактировании приложения');
+        if (config.interpreter && !(await manager.nodeVersions()).some(node => node.path === config.interpreter)) throw new Error('Выбранная версия Node.js больше недоступна. Обновите список версий.');
+        await manager.edit(Number(editMatch[1]), config); return send(200, { ok: true });
+      }
       const transferMatch = /^\/api\/processes\/(\d+)\/transfer$/.exec(url.pathname);
       if (req.method === 'POST' && transferMatch) {
         const processId = Number(transferMatch[1]); const targetId = String(body.targetServer || '');
