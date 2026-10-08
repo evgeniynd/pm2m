@@ -153,15 +153,20 @@ $('#process-rows').onclick = async event => {
   if (action === 'transfer') {
     const candidates = servers.filter(server => server.id !== target);
     if (!candidates.length) return;
-    const choices = candidates.map((server, index) => `${index + 1}. ${server.name}`).join('\n');
-    const choice = prompt(`Перенести «${p.name}» на сервер:\n${choices}\n\nВведите номер сервера:`, '1');
-    const destination = candidates[Number(choice) - 1];
+    const dialog = $('#transfer-dialog'); const form = $('#transfer-form'); const serverSelect = $('#transfer-server'); const pathInput = $('#transfer-path'); const error = $('#transfer-error');
+    $('#transfer-title').textContent = `Перенести · ${p.name}`;
+    serverSelect.innerHTML = candidates.map(server => `<option value="${escape(server.id)}">${escape(server.name)}${server.host ? ` · ${escape(server.host)}` : ''}</option>`).join('');
+    const updatePath = () => { const server = candidates.find(item => item.id === serverSelect.value); pathInput.value = server?.appRoot || ''; };
+    serverSelect.onchange = updatePath; updatePath(); error.textContent = ''; dialog.showModal();
+    const selected = await new Promise(resolve => {
+      const finish = value => { form.onsubmit = null; $('#transfer-cancel').onclick = null; $('#transfer-close').onclick = null; dialog.oncancel = null; if (dialog.open) dialog.close(); resolve(value); };
+      form.onsubmit = event => { event.preventDefault(); if (!pathInput.value.trim()) { error.textContent = 'Укажите путь к приложениям'; return; } finish({ id: serverSelect.value, root: pathInput.value.trim() }); };
+      $('#transfer-cancel').onclick = () => finish(null); $('#transfer-close').onclick = () => finish(null); dialog.oncancel = event => { event.preventDefault(); finish(null); };
+    });
+    const destination = selected && candidates.find(server => server.id === selected.id);
     if (!destination) return;
-    if (!confirm(`Перенести «${p.name}» на сервер «${destination.name}»? Приложение будет удалено с текущего сервера.`)) return;
     busy = true; updateControls();
-    let targetRoot = destination.appRoot?.trim();
-    if (!targetRoot) { targetRoot = prompt(`На сервере «${destination.name}» не задан путь к приложениям. Укажите путь:`, '/Projects')?.trim(); if (!targetRoot) return; }
-    try { await api(endpoint(`/api/processes/${id}/transfer`, target), { targetServer: destination.id, targetRoot }); toast(`Приложение перенесено на «${destination.name}»`); await loadServers(); await refresh(); }
+    try { await api(endpoint(`/api/processes/${id}/transfer`, target), { targetServer: destination.id, targetRoot: selected.root }); toast(`Приложение перенесено на «${destination.name}»`); await loadServers(); await refresh(); }
     catch (error) { toast(error.message, true); } finally { busy = false; updateControls(); }
     return;
   }
