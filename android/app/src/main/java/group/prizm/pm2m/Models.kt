@@ -9,7 +9,7 @@ data class Server(
     val id: String = UUID.randomUUID().toString(), val name: String = "", val host: String = "",
     val port: Int = 22, val username: String = "", val password: String = "",
     val privateKey: String = "", val passphrase: String = "", val fingerprint: String = "",
-    val pm2Path: String = "pm2", val pm2Home: String = ""
+    val pm2Path: String = "pm2", val pm2Home: String = "", val appRoot: String = "/projects"
 ) {
     fun validate(requireFingerprint: Boolean = true) {
         require(name.isNotBlank() && name.length <= 80) { "Укажите название сервера" }
@@ -17,17 +17,18 @@ data class Server(
         require(port in 1..65535 && username.isNotBlank() && !username.any { it.isWhitespace() || it == '\u0000' }) { "Проверьте порт и пользователя" }
         require(pm2Path == "pm2" || (pm2Path.startsWith('/') && !pm2Path.any { it == '\u0000' || it == '\n' })) { "PM2: укажите pm2 или абсолютный путь" }
         require(pm2Home.isEmpty() || pm2Home.startsWith('/')) { "PM2_HOME должен быть абсолютным путём" }
+        require(appRoot.startsWith('/') && !appRoot.any { it == '\u0000' || it == '\n' }) { "Путь к приложениям должен быть абсолютным" }
         if (requireFingerprint) require(Regex("SHA256:[A-Za-z0-9+/]{43}").matches(fingerprint)) { "Получите и проверьте отпечаток SSH" }
     }
     fun json() = JSONObject().apply {
         put("id", id); put("name", name); put("host", host); put("port", port); put("username", username)
         put("password", password); put("privateKey", privateKey); put("passphrase", passphrase)
-        put("fingerprint", fingerprint); put("pm2Path", pm2Path); put("pm2Home", pm2Home)
+        put("fingerprint", fingerprint); put("pm2Path", pm2Path); put("pm2Home", pm2Home); put("appRoot", appRoot)
     }
     companion object {
         fun from(j: JSONObject) = Server(j.getString("id"), j.getString("name"), j.getString("host"), j.optInt("port", 22),
             j.getString("username"), j.optString("password"), j.optString("privateKey"), j.optString("passphrase"),
-            j.getString("fingerprint"), j.optString("pm2Path", "pm2"), j.optString("pm2Home"))
+            j.getString("fingerprint"), j.optString("pm2Path", "pm2"), j.optString("pm2Home"), j.optString("appRoot", "/projects"))
     }
 }
 data class ProcessInfo(val id: Int, val name: String, val status: String, val cpu: Double, val memory: Long,

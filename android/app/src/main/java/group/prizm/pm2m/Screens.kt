@@ -159,6 +159,7 @@ private val verbs = mapOf("start" to "▷ Старт", "stop" to "Ⅱ Стоп",
         } else Field("Пароль SSH", s.password, !m.busy, secret = true) { s = s.copy(password = it) }
         Field("PM2: имя или абсолютный путь", s.pm2Path, !m.busy) { s = s.copy(pm2Path = it) }
         Field("PM2_HOME (необязательно)", s.pm2Home, !m.busy) { s = s.copy(pm2Home = it) }
+        Field("Путь к приложениям по умолчанию", s.appRoot, !m.busy) { s = s.copy(appRoot = it) }
         OutlinedButton(shape = themeButtonShape(), colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface), onClick = { m.probe(s) { s = s.copy(fingerprint = it); verified = false } }, enabled = !m.busy) { Text("Получить отпечаток SSH") }
         if (s.fingerprint.isNotBlank()) {
             SelectionContainer { Text(s.fingerprint, fontFamily = TerminalFont) }

@@ -125,7 +125,7 @@ class SshClient {
     suspend fun transfer(source: Server, target: Server, p: ProcessInfo, node: String) = withContext(Dispatchers.IO) {
         val sourceDir = p.cwd.ifBlank { p.script.substringBeforeLast('/', "/") }
         val appDir = sourceDir
-        val targetDir = "/projects/${p.name}"
+        val targetDir = "${target.appRoot.trimEnd('/')}/${p.name}"
         val archive = "/tmp/pm2m-${System.currentTimeMillis()}.tgz"
         val local = File.createTempFile("pm2m-transfer-", ".tgz")
         try {
