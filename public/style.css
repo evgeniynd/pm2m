@@ -94,3 +94,5 @@
 .git-action{min-width:82px}.git-action:disabled{opacity:.75;cursor:default}.git-action.git-update{background:#1b3a32;border-color:#2e735d;color:#83e0bd;box-shadow:0 0 0 1px #2e735d33}.git-action.git-update:hover{background:#245143}
 .git-current{display:inline-flex;align-items:center;min-width:82px;padding:6px 8px;color:#78c9aa;font-size:11px;white-space:nowrap}
 .git-update-dialog{width:min(700px,calc(100% - 32px))}.git-update-dialog .dialog-actions{margin-top:18px}.git-update-status{margin:0 0 12px}.git-update-changes{max-height:42vh;min-height:0;margin:0;white-space:pre-wrap}
+.row-actions{flex-wrap:wrap}.row-actions button{display:inline-flex;align-items:center;justify-content:center;gap:5px;min-height:34px}.row-actions .git-update{color:#c9bcff;border-color:#6e60ad}.row-actions .git-current{color:var(--green)}
+.row-actions .git-loading::after{content:"Проверка"}
