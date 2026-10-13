@@ -10,6 +10,7 @@ import java.io.ByteArrayOutputStream
 import java.security.MessageDigest
 import java.util.Base64
 import java.util.concurrent.ConcurrentHashMap
+import java.io.File
 
 class SshClient {
     private val active = ConcurrentHashMap.newKeySet<Session>()
@@ -26,6 +27,16 @@ class SshClient {
         override fun getKnownHostsRepositoryID() = "pm2m pinned host key"
         override fun getHostKey(): Array<HostKey> = emptyArray()
         override fun getHostKey(host: String?, type: String?): Array<HostKey> = emptyArray()
+    }
+    private suspend fun sftp(s: Server): Pair<Session, ChannelSftp> = withContext(Dispatchers.IO) {
+        s.validate(); val jsch = JSch().apply { hostKeyRepository = repository(s.fingerprint) {} }
+        if (s.privateKey.isNotBlank()) jsch.addIdentity(s.id, s.privateKey.toByteArray(), null, s.passphrase.takeIf { it.isNotEmpty() }?.toByteArray())
+        val session = jsch.getSession(s.username, s.host, s.port).apply {
+            setConfig("StrictHostKeyChecking", "yes"); setConfig("PreferredAuthentications", if (s.privateKey.isNotBlank()) "publickey" else "password")
+            if (s.privateKey.isBlank()) setPassword(s.password); timeout = 30000; connect(12000)
+        }
+        val channel = (session.openChannel("sftp") as ChannelSftp).apply { connect(12000) }
+        active.add(session); session to channel
     }
     suspend fun probe(s: Server): String = withContext(Dispatchers.IO) {
         s.validate(false); var observed: String? = null
@@ -93,10 +104,59 @@ class SshClient {
     suspend fun versions(s: Server, discovery: String): List<NodeVersion> = execute(s, Commands.shell(s, discovery)).lineSequence().mapNotNull {
         val parts = it.split('\t'); if (parts.size >= 2 && Regex("v[0-9]+\\.[0-9]+\\.[0-9]+.*").matches(parts[0]) && parts[1].startsWith('/')) NodeVersion(parts[0], parts[1]) else null
     }.distinctBy { it.path }.toList()
-    suspend fun start(s: Server, name: String, script: String, cwd: String, node: String, discovery: String) {
+    suspend fun gitState(s: Server, p: ProcessInfo): GitState = try {
+        val cwd = p.cwd.ifBlank { p.script.substringBeforeLast('/', ".") }
+        val output = execute(s, Commands.shell(s, "cd ${Commands.quote(cwd)} && git rev-parse --is-inside-work-tree && git rev-parse HEAD && git ls-remote origin HEAD"))
+        val lines = output.trim().lines()
+        if (lines.size < 3 || lines[0].trim() != "true") GitState(false) else GitState(true, lines[1].trim() != lines[2].trim().split(Regex("\\s+"))[0])
+    } catch (e: Exception) { GitState(false, null, e.message ?: "Git недоступен") }
+    suspend fun gitUpdate(s: Server, p: ProcessInfo) {
+        val current = processes(s).find { it.id == p.id && it.name == p.name } ?: error("Приложение изменилось")
+        val cwd = current.cwd.ifBlank { current.script.substringBeforeLast('/', ".") }
+        val wasOnline = current.status == "online"
+        execute(s, Commands.shell(s, "cd ${Commands.quote(cwd)} && git fetch --quiet origin && (git merge --ff-only FETCH_HEAD || git reset --hard FETCH_HEAD)"))
+        if (wasOnline) execute(s, Commands.pm2(s, "restart", current.id.toString()))
+    }
+    suspend fun attachGit(s: Server, p: ProcessInfo, repository: String) {
+        require(Regex("https://github\\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(?:\\.git)?").matches(repository)) { "Укажите HTTPS URL репозитория GitHub" }
+        val cwd = p.cwd.ifBlank { p.script.substringBeforeLast('/', ".") }
+        execute(s, Commands.shell(s, "cd ${Commands.quote(cwd)} && (git remote set-url origin ${Commands.quote(repository)} 2>/dev/null || git remote add origin ${Commands.quote(repository)})"))
+    }
+    suspend fun transfer(source: Server, target: Server, p: ProcessInfo, node: String) = withContext(Dispatchers.IO) {
+        val sourceDir = p.cwd.ifBlank { p.script.substringBeforeLast('/', "/") }
+        val appDir = sourceDir
+        val targetDir = "/projects/${p.name}"
+        val archive = "/tmp/pm2m-${System.currentTimeMillis()}.tgz"
+        val local = File.createTempFile("pm2m-transfer-", ".tgz")
+        try {
+            execute(source, "tar -czf ${Commands.quote(archive)} --dereference -C ${Commands.quote(appDir.substringBeforeLast('/').ifBlank { "/" })} ${Commands.quote(appDir.substringAfterLast('/'))}")
+            val (sourceSession, sourceSftp) = sftp(source); try { sourceSftp.get(archive, local.absolutePath) } finally { sourceSftp.disconnect(); sourceSession.disconnect() }
+            val (targetSession, targetSftp) = sftp(target); try {
+                execute(target, "mkdir -p ${Commands.quote(targetDir)}")
+                targetSftp.put(local.absolutePath, "/tmp/${local.name}")
+            } finally { targetSftp.disconnect(); targetSession.disconnect() }
+            execute(target, "mkdir -p ${Commands.quote(targetDir)} && tar -xzf ${Commands.quote("/tmp/${local.name}")} -C ${Commands.quote(targetDir)} --strip-components=1 && rm -f ${Commands.quote("/tmp/${local.name}")}")
+            val relativeScript = p.script.removePrefix(sourceDir).trimStart('/')
+            val launch = Commands.pm2(target, "start", "$targetDir/$relativeScript", "--name", p.name, "--cwd", targetDir, "--interpreter", node) + if (p.args.isBlank()) "" else " -- " + Commands.parseArgs(p.args).joinToString(" ", transform = Commands::quote)
+            execute(target, launch)
+            if (p.status != "online") { val moved = processes(target).find { it.name == p.name }; if (moved != null) execute(target, Commands.pm2(target, "stop", moved.id.toString())) }
+        } finally { try { execute(source, "rm -f ${Commands.quote(archive)}") } catch (_: Exception) {}; local.delete() }
+    }
+    suspend fun edit(s: Server, p: ProcessInfo, name: String, script: String, cwd: String, node: String, args: String) {
+        Commands.validateStart(name, script, cwd, node)
+        val current = processes(s).find { it.id == p.id && it.name == p.name } ?: error("Приложение изменилось")
+        val launch = Commands.pm2(s, "start", script, "--name", name, "--cwd", cwd, "--interpreter", node) + if (args.isBlank()) "" else " -- " + Commands.parseArgs(args).joinToString(" ", transform = Commands::quote)
+        val command = Commands.pm2(s, "delete", current.id.toString()) + " && " + launch
+        execute(s, Commands.shell(s, command))
+        if (current.status != "online") {
+            val replacement = processes(s).find { it.name == name }; if (replacement != null) execute(s, Commands.pm2(s, "stop", replacement.id.toString()))
+        }
+    }
+    suspend fun start(s: Server, name: String, script: String, cwd: String, node: String, args: String, discovery: String) {
         Commands.validateStart(name, script, cwd, node)
         check(versions(s, discovery).any { it.path == node }) { "Выбранная версия Node.js недоступна" }
         execute(s, "test -f ${Commands.quote(script)} && test -d ${Commands.quote(cwd)}")
-        execute(s, Commands.pm2(s, "start", script, "--name", name, "--cwd", cwd, "--interpreter", node))
+        val launch = Commands.pm2(s, "start", script, "--name", name, "--cwd", cwd, "--interpreter", node) + if (args.isBlank()) "" else " -- " + Commands.parseArgs(args).joinToString(" ", transform = Commands::quote)
+        execute(s, launch)
     }
 }

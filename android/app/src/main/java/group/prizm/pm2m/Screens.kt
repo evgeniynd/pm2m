@@ -10,6 +10,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -23,7 +25,7 @@ import kotlinx.coroutines.delay
 import java.util.Locale
 
 private data class Confirm(val title: String, val text: String, val run: () -> Unit)
-private val verbs = mapOf("start" to "Старт", "stop" to "Стоп", "restart" to "Рестарт", "reload" to "Reload", "delete" to "Удалить")
+private val verbs = mapOf("start" to "▷ Старт", "stop" to "Ⅱ Стоп", "restart" to "↻ Рестарт", "delete" to "× Удалить")
 
 @Composable fun Pm2mApp(m: AppModel, biometric: (Boolean) -> Unit, biometricAvailable: () -> Boolean) {
     Pm2mTheme(m.theme) {
@@ -70,10 +72,10 @@ private val verbs = mapOf("start" to "Старт", "stop" to "Стоп", "restar
 @Composable private fun Workspace(m: AppModel, biometric: (Boolean) -> Unit, biometricAvailable: () -> Boolean) {
     var edit by remember { mutableStateOf<Server?>(null) }; var confirm by remember { mutableStateOf<Confirm?>(null) }
     var security by remember { mutableStateOf(false) }; var newApp by remember { mutableStateOf(false) }
-    var logProcess by remember { mutableStateOf<ProcessInfo?>(null) }
-    BackHandler(enabled = m.selected != null || security || edit != null) { when { edit != null -> edit = null; security -> security = false; else -> m.back() } }
-    LaunchedEffect(m.selected?.id, security, edit, newApp, logProcess) {
-        while (m.selected != null && !security && edit == null && !newApp && logProcess == null) { delay(5000); if (!m.busy) m.refresh() }
+    var logProcess by remember { mutableStateOf<ProcessInfo?>(null) }; var editProcess by remember { mutableStateOf<ProcessInfo?>(null) }; var transferProcess by remember { mutableStateOf<ProcessInfo?>(null) }; var gitProcess by remember { mutableStateOf<ProcessInfo?>(null) }
+    BackHandler(enabled = m.selected != null || security || edit != null || editProcess != null || transferProcess != null || gitProcess != null) { when { gitProcess != null -> gitProcess = null; transferProcess != null -> transferProcess = null; editProcess != null -> editProcess = null; edit != null -> edit = null; security -> security = false; else -> m.back() } }
+    LaunchedEffect(m.selected?.id, security, edit, newApp, logProcess, editProcess, transferProcess, gitProcess) {
+        while (m.selected != null && !security && edit == null && !newApp && logProcess == null && editProcess == null && transferProcess == null && gitProcess == null) { delay(5000); if (!m.busy) m.refresh() }
     }
     Scaffold(containerColor = MaterialTheme.colorScheme.background, topBar = {
         TopAppBar(colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background), title = { Text(if (edit != null) "SSH-сервер" else if (security) "Настройки" else m.selected?.name ?: "pm2m") },
@@ -116,20 +118,9 @@ private val verbs = mapOf("start" to "Старт", "stop" to "Стоп", "restar
                     Field("Поиск приложений", search) { search = it }
                     Text(m.refreshError.ifEmpty { "${m.processes.size} приложений · SSH" }, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        items(m.processes.filter { it.name.contains(search, true) }, key = { it.id }) { p -> Panel {
-                            Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Text(p.name, style = MaterialTheme.typography.titleLarge)
-                                Text("#${p.id} · ${p.status} · ${p.mode}", color = if (p.status == "online") MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurface)
-                                Text("CPU ${String.format(Locale.ROOT, "%.1f", p.cpu)}% · RAM ${p.memory / 1048576} МБ · рестарты ${p.restarts}")
-                                if (p.status == "online") Text("Работает ${maxOf(0, System.currentTimeMillis() - p.uptime) / 60000} мин")
-                                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    TextButton(colors = themeTextButtonColors(), onClick = { logProcess = p }, enabled = !m.busy) { Text("Логи") }
-                                    for ((action, label) in verbs) TextButton(colors = themeTextButtonColors(), enabled = !m.busy, onClick = {
-                                        confirm = Confirm("$label ${p.name}?", "Сервер: ${m.selected?.name}, процесс #${p.id}." + if (action == "delete") " Удаление из PM2 не удаляет файлы." else "") { m.action(p, action) }
-                                    }) { Text(label) }
-                                }
-                            }
-                        } }
+                        items(m.processes.filter { it.name.contains(search, true) }, key = { it.id }) { p -> ProcessCard(m, p, m.gitStatuses[p.id], m.servers.size > 1,
+                            onLogs = { logProcess = p }, onEdit = { editProcess = p }, onTransfer = { transferProcess = p }, onGit = { state -> when { state == null -> gitProcess = p; state.updateAvailable == true -> confirm = Confirm("Обновить ${p.name}?", "Будут получены изменения из Git и сохранится текущее состояние процесса.") { m.updateGit(p) }; else -> m.message = "Версия приложения актуальна" } },
+                            onAction = { action -> confirm = Confirm("${verbs[action] ?: action} ${p.name}?", "Сервер: ${m.selected?.name}, процесс #${p.id}." + if (action == "delete") " Удаление из PM2 не удаляет файлы." else "") { m.action(p, action) } }) }
                     }
                 }
             }
@@ -142,6 +133,9 @@ private val verbs = mapOf("start" to "Старт", "stop" to "Стоп", "restar
         confirmButton = { if (biometricAvailable()) TextButton(colors = themeTextButtonColors(), onClick = { biometric(true) }) { Text("Включить") } },
         dismissButton = { TextButton(colors = themeTextButtonColors(), onClick = { m.offerBiometric = false }) { Text("Позже") } })
     if (newApp) NewAppDialog(m) { newApp = false }
+    editProcess?.let { EditAppDialog(m, it) { editProcess = null } }
+    transferProcess?.let { TransferDialog(m, it) { transferProcess = null } }
+    gitProcess?.let { GitDialog(m, it) { gitProcess = null } }
     logProcess?.let { p -> LogsDialog(m, p) { logProcess = null } }
 }
 
@@ -175,18 +169,77 @@ private val verbs = mapOf("start" to "Старт", "stop" to "Стоп", "restar
         Spacer(Modifier.height(24.dp))
     }
 }
+@Composable private fun ProcessCard(m: AppModel, p: ProcessInfo, git: GitState?, canTransfer: Boolean, onLogs: () -> Unit, onEdit: () -> Unit, onTransfer: () -> Unit, onGit: (GitState?) -> Unit, onAction: (String) -> Unit) {
+    Panel {
+        Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                Box(Modifier.size(56.dp).background(MaterialTheme.colorScheme.primary.copy(alpha = .12f), RoundedCornerShape(12.dp)), contentAlignment = androidx.compose.ui.Alignment.Center) { Text(">_", color = MaterialTheme.colorScheme.secondary, style = MaterialTheme.typography.headlineSmall, fontFamily = TerminalFont) }
+                Column { Text(p.name, style = MaterialTheme.typography.titleLarge); Text("#${p.id} · ${p.mode} · PID ${if (p.status == "online") "работает" else "—"}", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall) }
+            }
+            HorizontalDivider()
+            Row(Modifier.fillMaxWidth()) { Text("Статус", Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurfaceVariant); Text(if (p.status == "online") "● Работает" else "● Остановлен", color = if (p.status == "online") Color(0xFF73D7B8) else MaterialTheme.colorScheme.onSurfaceVariant) }
+            Row(Modifier.fillMaxWidth()) { Text("CPU / RAM", Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurfaceVariant); Column { Text("${String.format(Locale.ROOT, "%.1f", p.cpu)}%"); Text("${p.memory / 1048576} MB", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall) } }
+            Row(Modifier.fillMaxWidth()) { Text("Время работы", Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurfaceVariant); Text(if (p.status == "online") uptimeText(p.uptime) else "—") }
+            Row(Modifier.fillMaxWidth()) { Text("Рестарты", Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurfaceVariant); Text(p.restarts.toString()) }
+            HorizontalDivider()
+            FlowRow(maxItemsInEachRow = 3, modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (canTransfer) OutlinedButton(onClick = onTransfer, modifier = Modifier.weight(1f), enabled = !m.busy) { Text("⇢ Перенести") }
+                OutlinedButton(onClick = onEdit, modifier = Modifier.weight(1f), enabled = !m.busy) { Text("✎ Изменить") }
+                OutlinedButton(onClick = onLogs, modifier = Modifier.weight(1f), enabled = !m.busy) { Text("▤ Логи") }
+                OutlinedButton(onClick = { onGit(git) }, modifier = Modifier.weight(1f), enabled = !m.busy, colors = ButtonDefaults.outlinedButtonColors(contentColor = when (git?.updateAvailable) { true -> Color(0xFFF3AD61); false -> Color(0xFF73D7B8); else -> MaterialTheme.colorScheme.onSurface })) { Text(if (git?.updateAvailable == true) "↥ Обновить" else if (git?.available == true) "✓ Актуально" else "+ Git") }
+                OutlinedButton(onClick = { onAction("restart") }, modifier = Modifier.weight(1f), enabled = !m.busy) { Text("↻ Рестарт") }
+                OutlinedButton(onClick = { onAction(if (p.status == "online") "stop" else "start") }, modifier = Modifier.weight(1f), enabled = !m.busy) { Text(if (p.status == "online") "Ⅱ Стоп" else "▷ Старт") }
+                OutlinedButton(onClick = { onAction("delete") }, modifier = Modifier.weight(1f), enabled = !m.busy, colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)) { Text("× Удалить") }
+            }
+        }
+    }
+}
+private fun uptimeText(uptime: Long): String { val hours = maxOf(0, System.currentTimeMillis() - uptime) / 3_600_000; return if (hours >= 24) "${hours / 24} д ${hours % 24} ч" else "${hours} ч" }
+
+@Composable private fun GitDialog(m: AppModel, p: ProcessInfo, close: () -> Unit) {
+    var repository by remember(p.id) { mutableStateOf("") }
+    AlertDialog(onDismissRequest = { if (!m.busy) close() }, title = { Text("Git · ${p.name}") }, text = { Column(verticalArrangement = Arrangement.spacedBy(10.dp)) { Text("Укажите HTTPS URL публичного GitHub-репозитория.", color = MaterialTheme.colorScheme.onSurfaceVariant); Field("URL репозитория", repository, !m.busy, keyboard = KeyboardType.Uri) { repository = it } } }, confirmButton = { TextButton(colors = themeTextButtonColors(), onClick = { m.attachGit(p, repository.trim()); close() }, enabled = !m.busy && repository.isNotBlank()) { Text("Сохранить") } }, dismissButton = { TextButton(colors = themeTextButtonColors(), onClick = close, enabled = !m.busy) { Text("Отмена") } })
+}
+
+@Composable private fun TransferDialog(m: AppModel, p: ProcessInfo, close: () -> Unit) {
+    val source = m.selected; val destinations = m.servers.filter { it.id != source?.id }; var destination by remember { mutableStateOf(destinations.firstOrNull()) }; var node by remember { mutableStateOf("") }
+    LaunchedEffect(destination?.id) { destination?.let { node = ""; m.loadVersions(it) } }
+    LaunchedEffect(m.versions, destination?.id) { if (node.isBlank()) node = m.versions.firstOrNull()?.path ?: "" }
+    AlertDialog(onDismissRequest = { if (!m.busy) close() }, title = { Text("Перенести · ${p.name}") }, text = {
+        Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("Выберите сервер назначения и версию Node.js. Состояние процесса будет сохранено.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            destinations.forEach { server -> Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) { RadioButton(destination?.id == server.id, { destination = server }, enabled = !m.busy); Text(server.name) } }
+            Text("Версия Node.js на сервере назначения")
+            m.versions.forEach { v -> Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) { RadioButton(node == v.path, { node = v.path }, enabled = !m.busy); Text("${v.version}\n${v.path}") } }
+            if (destination != null && m.versions.isEmpty()) Text("Поиск версий…")
+        }
+    }, confirmButton = { TextButton(colors = themeTextButtonColors(), onClick = { if (destination != null) { m.transfer(p, destination!!, node); close() } }, enabled = !m.busy && destination != null && node.isNotBlank()) { Text("Перенести") } }, dismissButton = { TextButton(colors = themeTextButtonColors(), onClick = close, enabled = !m.busy) { Text("Отмена") } })
+}
+
+@Composable private fun EditAppDialog(m: AppModel, p: ProcessInfo, close: () -> Unit) {
+    var name by remember(p.id) { mutableStateOf(p.name) }; var script by remember(p.id) { mutableStateOf(p.script) }; var cwd by remember(p.id) { mutableStateOf(p.cwd) }; var args by remember(p.id) { mutableStateOf(p.args) }; var node by remember(p.id) { mutableStateOf(p.interpreter) }
+    LaunchedEffect(p.id) { m.loadVersions() }
+    LaunchedEffect(m.versions) { if (node.isBlank() && m.versions.isNotEmpty()) node = m.versions.first().path }
+    AlertDialog(onDismissRequest = { if (!m.busy) close() }, title = { Text("Изменить · ${p.name}") }, text = {
+        Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Field("Имя", name, !m.busy) { name = it }; Field("Путь к скрипту", script, !m.busy) { script = it }; Field("Рабочая папка", cwd, !m.busy) { cwd = it }; Field("Аргументы запуска", args, !m.busy) { args = it }
+            Text("Версия Node.js"); m.versions.forEach { v -> Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) { RadioButton(node == v.path, { node = v.path }, enabled = !m.busy); Text("${v.version}\n${v.path}", Modifier.padding(top = 8.dp)) } }
+            if (m.versions.isEmpty()) Text("Поиск версий Node.js…", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }, confirmButton = { TextButton(colors = themeTextButtonColors(), onClick = { m.edit(p, name, script, cwd, node, args); close() }, enabled = !m.busy && name.isNotBlank() && script.isNotBlank() && cwd.isNotBlank() && node.isNotBlank()) { Text("Сохранить") } }, dismissButton = { TextButton(colors = themeTextButtonColors(), onClick = close, enabled = !m.busy) { Text("Отмена") } })
+}
 @Composable private fun NewAppDialog(m: AppModel, close: () -> Unit) {
-    var name by remember { mutableStateOf("") }; var script by remember { mutableStateOf("") }; var cwd by remember { mutableStateOf("") }; var node by remember { mutableStateOf("") }
+    var name by remember { mutableStateOf("") }; var script by remember { mutableStateOf("") }; var cwd by remember { mutableStateOf("") }; var args by remember { mutableStateOf("") }; var node by remember { mutableStateOf("") }
     LaunchedEffect(m.versions) { if (m.versions.none { it.path == node }) node = m.versions.firstOrNull()?.path ?: "" }
     AlertDialog(onDismissRequest = { if (!m.busy) close() }, title = { Text("Новое приложение") }, text = {
         Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Field("Имя", name, !m.busy) { name = it }; Field("Путь к скрипту", script, !m.busy) { script = it }; Field("Рабочая папка (пусто = папка скрипта)", cwd, !m.busy) { cwd = it }
+            Field("Имя", name, !m.busy) { name = it }; Field("Путь к скрипту", script, !m.busy) { script = it }; Field("Рабочая папка (пусто = папка скрипта)", cwd, !m.busy) { cwd = it }; Field("Аргументы запуска", args, !m.busy) { args = it }
             Text("Версия Node.js на сервере")
             for (v in m.versions) Row { RadioButton(selected = node == v.path, onClick = { node = v.path }, enabled = !m.busy); Text("${v.version}\n${v.path}", Modifier.padding(top = 8.dp)) }
             if (m.versions.isEmpty()) Text(if (m.busy) "Поиск версий…" else "Версии не найдены")
             TextButton(colors = themeTextButtonColors(), onClick = m::loadVersions, enabled = !m.busy) { Text("Проверить версии") }; ErrorBanner(m)
         }
-    }, confirmButton = { TextButton(colors = themeTextButtonColors(), enabled = !m.busy && node.isNotEmpty(), onClick = { m.start(name, script, cwd.ifBlank { script.substringBeforeLast('/', "/").ifBlank { "/" } }, node, close) }) { Text("Запустить") } },
+    }, confirmButton = { TextButton(colors = themeTextButtonColors(), enabled = !m.busy && node.isNotEmpty(), onClick = { m.start(name, script, cwd.ifBlank { script.substringBeforeLast('/', "/").ifBlank { "/" } }, node, args, close) }) { Text("Запустить") } },
         dismissButton = { TextButton(colors = themeTextButtonColors(), onClick = close, enabled = !m.busy) { Text("Отмена") } })
 }
 @Composable private fun LogsDialog(m: AppModel, p: ProcessInfo, close: () -> Unit) {

@@ -31,8 +31,10 @@ data class Server(
     }
 }
 data class ProcessInfo(val id: Int, val name: String, val status: String, val cpu: Double, val memory: Long,
-    val restarts: Int, val script: String, val outLog: String, val errLog: String, val uptime: Long, val mode: String)
+    val restarts: Int, val script: String, val outLog: String, val errLog: String, val uptime: Long, val mode: String,
+    val cwd: String = "", val interpreter: String = "", val args: String = "")
 data class NodeVersion(val version: String, val path: String)
+data class GitState(val available: Boolean = false, val updateAvailable: Boolean? = null, val error: String = "")
 
 object Commands {
     fun quote(value: String): String {
@@ -58,14 +60,25 @@ object Commands {
                 val p = array.getJSONObject(i); val e = p.optJSONObject("pm2_env") ?: JSONObject(); val m = p.optJSONObject("monit") ?: JSONObject()
                 ProcessInfo(p.getInt("pm_id"), p.getString("name"), e.optString("status"), m.optDouble("cpu", 0.0), m.optLong("memory"),
                     e.optInt("restart_time"), e.optString("pm_exec_path"), e.optString("pm_out_log_path"), e.optString("pm_err_log_path"),
-                    e.optLong("pm_uptime"), e.optString("exec_mode"))
+                    e.optLong("pm_uptime"), e.optString("exec_mode"), e.optString("pm_cwd"), e.optString("interpreter"), readArgs(e))
             }
             } catch (_: Exception) { continue }
         }
         error("PM2 вернул некорректный список. Проверьте путь и SSH-окружение.")
     }
+    private fun readArgs(e: JSONObject): String {
+        val direct = e.optString("args").trim()
+        if (direct.isNotEmpty()) return direct
+        val scriptArgs = e.optString("script_args").trim()
+        if (scriptArgs.isNotEmpty()) return scriptArgs
+        val array = e.optJSONArray("args")
+        if (array != null) return (0 until array.length()).joinToString(" ") { quoteArg(array.optString(it)) }
+        return ""
+    }
+    private fun quoteArg(value: String): String = if (value.any { it.isWhitespace() }) "\"${value.replace("\"", "\\\"")}\"" else value
     fun validateStart(name: String, script: String, cwd: String, node: String) {
         require(Regex("[a-zA-Z0-9_-]{1,64}").matches(name)) { "Имя: латиница, цифры, _ и -" }
         require(listOf(script, cwd, node).all { it.startsWith('/') && !it.any { c -> c == '\u0000' || c == '\n' } }) { "Укажите абсолютные пути скрипта, папки и Node.js" }
     }
+    fun parseArgs(value: String): List<String> = Regex("\\\"((?:\\\\.|[^\\\"])*)\\\"|'([^']*)'|([^\\s]+)").findAll(value).map { it.groupValues[1].ifEmpty { it.groupValues[2].ifEmpty { it.groupValues[3] } }.replace("\\\\\"", "\\\"") }.toList()
 }

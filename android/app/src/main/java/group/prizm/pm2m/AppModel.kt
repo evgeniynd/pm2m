@@ -32,6 +32,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
     var servers by mutableStateOf<List<Server>>(emptyList()); private set
     var selected by mutableStateOf<Server?>(null); private set
     var processes by mutableStateOf<List<ProcessInfo>>(emptyList()); private set
+    var gitStatuses by mutableStateOf<Map<Int, GitState>>(emptyMap()); private set
     var versions by mutableStateOf<List<NodeVersion>>(emptyList()); private set
     var logs by mutableStateOf(""); private set
     private val discovery get() = getApplication<Application>().assets.open("discover-node.sh").bufferedReader().use { it.readText() }
@@ -72,7 +73,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
     }
     fun lock() {
         epoch++; work?.cancel(); polling?.cancel(); ssh.cancelAll(); master?.fill(0); master = null
-        servers = emptyList(); selected = null; processes = emptyList(); versions = emptyList(); logs = ""
+        servers = emptyList(); selected = null; processes = emptyList(); versions = emptyList(); gitStatuses = emptyMap(); logs = ""
         unlocked = false; busy = false; error = ""; message = ""; offerBiometric = false
     }
     fun reset() { lock(); vault.reset(); initialized = false; biometricEnabled = false }
@@ -87,8 +88,8 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         if (selected?.id == s.id) back()
     }
     fun probe(s: Server, done: (String) -> Unit) = task { done(ssh.probe(s)) }
-    fun select(s: Server) { selected = s; processes = emptyList(); refreshError = ""; refresh() }
-    fun back() { epoch++; work?.cancel(); polling?.cancel(); ssh.cancelAll(); busy = false; selected = null; processes = emptyList(); logs = ""; error = ""; refreshError = "" }
+    fun select(s: Server) { selected = s; processes = emptyList(); gitStatuses = emptyMap(); refreshError = ""; refresh() }
+    fun back() { epoch++; work?.cancel(); polling?.cancel(); ssh.cancelAll(); busy = false; selected = null; processes = emptyList(); gitStatuses = emptyMap(); logs = ""; error = ""; refreshError = "" }
     var refreshError by mutableStateOf(""); private set
     fun refresh() {
         val s = selected ?: return
@@ -98,11 +99,19 @@ class AppModel(app: Application) : AndroidViewModel(app) {
             try {
                 val result = ssh.processes(s)
                 ensureActive()
-                if (epoch == started && selected?.id == s.id) { processes = result; refreshError = "" }
+                if (epoch == started && selected?.id == s.id) { processes = result; refreshError = ""; refreshGit(s, result) }
             } catch (e: CancellationException) { throw e }
             catch (_: Exception) { if (epoch == started) refreshError = "Нет связи. Показаны последние данные." }
         }
     }
+    private fun refreshGit(s: Server, list: List<ProcessInfo>) = viewModelScope.launch(Dispatchers.IO) {
+        val states = list.associate { it.id to runCatching { ssh.gitState(s, it) }.getOrDefault(GitState()) }
+        withContext(Dispatchers.Main) { if (selected?.id == s.id) gitStatuses = states }
+    }
+    fun updateGit(p: ProcessInfo) { val s = selected ?: return; task { ssh.gitUpdate(s, p); gitStatuses = gitStatuses + (p.id to GitState(true, false)); processes = ssh.processes(s); message = "Приложение обновлено из Git" } }
+    fun attachGit(p: ProcessInfo, repository: String) { val s = selected ?: return; task { ssh.attachGit(s, p, repository); gitStatuses = gitStatuses + (p.id to GitState(true, false)); message = "Git-репозиторий добавлен" } }
+    fun edit(p: ProcessInfo, name: String, script: String, cwd: String, node: String, args: String) { val s = selected ?: return; task { ssh.edit(s, p, name, script, cwd, node, args); processes = ssh.processes(s); message = "Параметры приложения сохранены" } }
+    fun transfer(p: ProcessInfo, destination: Server, node: String) { val source = selected ?: return; task { ssh.transfer(source, destination, p, node); message = "Приложение перенесено на ${destination.name}" } }
     suspend fun readLogs(p: ProcessInfo, stderr: Boolean): String {
         val s = selected ?: error("Сервер не выбран")
         return ssh.logs(s, p, stderr)
@@ -110,9 +119,10 @@ class AppModel(app: Application) : AndroidViewModel(app) {
     fun action(p: ProcessInfo, action: String) { val s = selected ?: return; task { ssh.action(s, p, action); processes = ssh.processes(s); message = "Действие выполнено" } }
     fun savePm2() { val s = selected ?: return; task { ssh.execute(s, Commands.pm2(s, "save")); message = "Список PM2 сохранён" } }
     fun loadLogs(p: ProcessInfo, stderr: Boolean) { val s = selected ?: return; logs = ""; task { logs = ssh.logs(s, p, stderr) } }
-    fun loadVersions() { val s = selected ?: return; versions = emptyList(); task { versions = ssh.versions(s, discovery) } }
-    fun start(name: String, script: String, cwd: String, node: String, done: () -> Unit) { val s = selected ?: return; task {
-        ssh.start(s, name, script, cwd, node, discovery); processes = ssh.processes(s); done(); message = "Приложение запущено"
+    fun loadVersions() { selected?.let { loadVersions(it) } }
+    fun loadVersions(server: Server) { versions = emptyList(); task { versions = ssh.versions(server, discovery) } }
+    fun start(name: String, script: String, cwd: String, node: String, args: String, done: () -> Unit) { val s = selected ?: return; task {
+        ssh.start(s, name, script, cwd, node, args, discovery); processes = ssh.processes(s); done(); message = "Приложение запущено"
     } }
     override fun onCleared() { lock(); super.onCleared() }
 }
