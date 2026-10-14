@@ -1,7 +1,7 @@
 const $ = selector => document.querySelector(selector);
 const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
 let servers = [], processes = [], selected = localStorage.getItem('pm2m-server') || 'local';
-let authenticated = false, connected = false, requestId = 0, busy = false, loading = false, gitLoading = false, gitInitialLoading = false, gitReady = false;
+let authenticated = false, connected = false, requestId = 0, busy = false, loading = false, gitLoading = false, gitLoadingTarget = null, gitInitialLoading = false, gitReady = false;
 let logTarget = null, logStream = 'stdout', logData = {}, logLoading = false, toastTimer;
 let processTarget = null, processEditId = null, editInterpreter = '', versionsRequest = 0, versionsLoading = false, autoAppPath = '', autoScriptPath = '';
 
@@ -91,7 +91,7 @@ async function refreshGitUpdates(target = selected) {
     const { updates } = await api(endpoint('/api/processes/git-updates', target));
     if (target !== selected) return;
     processes = processes.map(p => ({ ...p, git: updates[String(p.id)] || undefined }));
-  } catch {} finally { gitLoading = false; gitReady = true; gitInitialLoading = false; if (target === selected) renderProcesses(); }
+  } catch {} finally { if (gitLoadingTarget === target) { gitLoading = false; gitLoadingTarget = null; } if (target === selected) { gitReady = true; gitInitialLoading = false; renderProcesses(); } }
 }
 async function refresh() {
   const current = ++requestId; const target = selected;
@@ -128,7 +128,7 @@ async function refresh() {
   } finally { if (current === requestId) loading = false; }
 }
 async function selectServer(id) {
-  selected = id; gitReady = false; gitInitialLoading = false; localStorage.setItem('pm2m-server', id); $('#server-select').value = id;
+  selected = id; gitReady = false; gitInitialLoading = false; gitLoading = false; gitLoadingTarget = null; localStorage.setItem('pm2m-server', id); $('#server-select').value = id;
   connected = false; processes = []; renderProcesses(); $('#connection').textContent = 'Подключение…'; $('#connection').className = 'badge neutral';
   for (const key of ['total','online','cpu','memory']) $(`#stat-${key}`).textContent = '—';
   $('#stat-stopped').textContent = '—'; $('#host-info').textContent = '—'; $('#updated').textContent = 'Ожидание данных'; $('#demo-banner').hidden = true;
