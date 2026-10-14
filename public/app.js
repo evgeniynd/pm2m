@@ -1,6 +1,7 @@
 const $ = selector => document.querySelector(selector);
 const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
 let servers = [], processes = [], selected = localStorage.getItem('pm2m-server') || 'local';
+const gitStatusCache = new Map();
 let authenticated = false, connected = false, requestId = 0, busy = false, loading = false, gitLoading = false, gitLoadingTarget = null, gitInitialLoading = false, gitReady = false;
 let logTarget = null, logStream = 'stdout', logData = {}, logLoading = false, toastTimer;
 let processTarget = null, processEditId = null, editInterpreter = '', versionsRequest = 0, versionsLoading = false, autoAppPath = '', autoScriptPath = '';
@@ -84,13 +85,16 @@ function updateControls() {
 function showOperation(message) { $('#operation-message').textContent = message; const dialog = $('#operation-dialog'); if (!dialog.open) dialog.showModal(); }
 function hideOperation() { const dialog = $('#operation-dialog'); if (dialog.open) dialog.close(); }
 async function refreshGitUpdates(target = selected) {
-  if (!authenticated || !connected || gitLoading || target !== selected) return;
-  gitLoading = true; gitInitialLoading = !gitReady;
+  if (!authenticated || !connected || target !== selected || gitLoadingTarget === target) return;
+  gitLoading = true; gitLoadingTarget = target; gitInitialLoading = !gitReady;
   if (gitInitialLoading) renderProcesses();
   try {
     const { updates } = await api(endpoint('/api/processes/git-updates', target));
     if (target !== selected) return;
-    processes = processes.map(p => ({ ...p, git: updates[String(p.id)] || undefined }));
+    const cachedGit = gitStatusCache.get(target) || new Map();
+    for (const p of processes) { const status = updates[String(p.id)]; if (status) cachedGit.set(p.id, status); }
+    gitStatusCache.set(target, cachedGit);
+    processes = processes.map(p => ({ ...p, git: cachedGit.get(p.id) }));
   } catch {} finally { if (gitLoadingTarget === target) { gitLoading = false; gitLoadingTarget = null; } if (target === selected) { gitReady = true; gitInitialLoading = false; renderProcesses(); } }
 }
 async function refresh() {
@@ -107,8 +111,8 @@ async function refresh() {
     const data = await api(endpoint('/api/processes', target));
     if (current !== requestId || !authenticated) return;
     connected = true;
-    const previousGit = new Map(processes.map(process => [process.id, process.git]));
-    processes = data.processes.map(process => ({ ...process, git: previousGit.get(process.id) }));
+    const cachedGit = gitStatusCache.get(target) || new Map();
+    processes = data.processes.map(process => ({ ...process, git: cachedGit.get(process.id) }));
     $('#connection').textContent = '● Подключено'; $('#connection').className = 'badge online';
     $('#process-error').hidden = true; $('#demo-banner').hidden = !data.demo;
     $('#stat-total').textContent = processes.length;
@@ -128,7 +132,7 @@ async function refresh() {
   } finally { if (current === requestId) loading = false; }
 }
 async function selectServer(id) {
-  selected = id; gitReady = false; gitInitialLoading = false; gitLoading = false; gitLoadingTarget = null; localStorage.setItem('pm2m-server', id); $('#server-select').value = id;
+  selected = id; gitReady = gitStatusCache.has(id); gitInitialLoading = false; gitLoading = false; gitLoadingTarget = null; localStorage.setItem('pm2m-server', id); $('#server-select').value = id;
   connected = false; processes = []; renderProcesses(); $('#connection').textContent = 'Подключение…'; $('#connection').className = 'badge neutral';
   for (const key of ['total','online','cpu','memory']) $(`#stat-${key}`).textContent = '—';
   $('#stat-stopped').textContent = '—'; $('#host-info').textContent = '—'; $('#updated').textContent = 'Ожидание данных'; $('#demo-banner').hidden = true;
