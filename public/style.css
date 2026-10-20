@@ -95,4 +95,5 @@
 .git-current{color:var(--green)}
 .git-update-dialog{width:min(700px,calc(100% - 32px))}.git-update-dialog .dialog-actions{margin-top:18px}.git-update-status{margin:0 0 12px}.git-update-changes{max-height:42vh;min-height:0;margin:0;white-space:pre-wrap}
 .row-actions{flex-wrap:wrap}.row-actions button{display:inline-flex;align-items:center;justify-content:center;gap:5px;min-height:34px}.row-actions button.git-update{color:#f3ad61 !important}.row-actions button.git-current{color:var(--green) !important}
+.row-actions .git-auto-toggle{display:inline-flex;align-items:center;justify-content:center;gap:5px;min-height:34px;padding:6px 8px;border:1px solid #2b3343;background:#1a202c;border-radius:8px;color:#aeb9cd;font-size:11px;cursor:pointer;white-space:nowrap}.row-actions .git-auto-toggle input{width:auto;margin:0;accent-color:var(--accent);cursor:pointer}.row-actions .git-auto-toggle:has(input:checked){color:var(--green)}.row-actions .git-auto-toggle:has(input:disabled){opacity:.45;cursor:not-allowed}
 .row-actions .git-loading::after{content:"Проверка"}

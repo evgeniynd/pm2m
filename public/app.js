@@ -63,7 +63,7 @@ function renderProcesses() {
   const query = $('#search').value.toLowerCase(); const status = $('#status-filter').value;
   const filtered = processes.filter(p => p.name.toLowerCase().includes(query) && (status === 'all' || p.status === status));
   $('#process-count').textContent = processes.length;
-  $('#process-rows').innerHTML = filtered.map(p => `<tr><td><div class="app-cell"><span class="app-icon">&gt;_</span><div><div class="app-name">${escape(p.name)}</div><div class="app-meta">#${p.id} · ${escape(p.mode === 'cluster_mode' ? 'cluster' : 'fork')} · PID ${p.pid || '—'}</div></div></div></td><td><span class="badge ${['online','stopped','errored'].includes(p.status) ? p.status : 'neutral'}">● &nbsp;${escape(statusName(p.status))}</span></td><td><div class="cpu">${Number(p.cpu).toFixed(1)}%</div><div class="ram">${memory(p.memory)}</div></td><td>${p.status === 'online' ? uptime(p.uptime) : '—'}</td><td>${p.restarts}</td><td><div class="row-actions"><button data-action="edit" data-id="${p.id}" title="Редактировать">✎ Изменить</button><button data-action="logs" data-id="${p.id}" title="Логи">▤ Логи</button><button data-action="update" data-id="${p.id}" title="Обновить из GitHub">↥ Git</button>${p.status === 'online' ? `<button data-action="restart" data-id="${p.id}" title="Перезапустить" aria-label="Перезапустить ${escape(p.name)}">↻ Рестарт</button><button data-action="stop" data-id="${p.id}" title="Остановить" aria-label="Остановить ${escape(p.name)}">Ⅱ Стоп</button>` : `<button data-action="start" data-id="${p.id}" title="Запустить" aria-label="Запустить ${escape(p.name)}">▷ Старт</button>`}<button class="delete" data-action="delete" data-id="${p.id}" title="Удалить из PM2" aria-label="Удалить ${escape(p.name)}">× Удалить</button></div></td></tr>`).join('');
+  $('#process-rows').innerHTML = filtered.map(p => `<tr><td><div class="app-cell"><span class="app-icon">&gt;_</span><div><div class="app-name">${escape(p.name)}</div><div class="app-meta">#${p.id} · ${escape(p.mode === 'cluster_mode' ? 'cluster' : 'fork')} · PID ${p.pid || '—'}</div></div></div></td><td><span class="badge ${['online','stopped','errored'].includes(p.status) ? p.status : 'neutral'}">● &nbsp;${escape(statusName(p.status))}</span></td><td><div class="cpu">${Number(p.cpu).toFixed(1)}%</div><div class="ram">${memory(p.memory)}</div></td><td>${p.status === 'online' ? uptime(p.uptime) : '—'}</td><td>${p.restarts}</td><td><div class="row-actions"><button data-action="edit" data-id="${p.id}" title="Редактировать">✎ Изменить</button><button data-action="logs" data-id="${p.id}" title="Логи">▤ Логи</button><button data-action="update" data-id="${p.id}" title="Обновить из GitHub">↥ Git</button><label class="git-auto-toggle" title="Автоматически обновлять из Git" data-id="${p.id}"><input type="checkbox" data-action="git-auto" data-id="${p.id}" ${p.git?.autoUpdate ? 'checked' : ''} ${p.git?.available ? '' : 'disabled'} aria-label="Автообновление Git"><span>↻ Авто</span></label>${p.status === 'online' ? `<button data-action="restart" data-id="${p.id}" title="Перезапустить" aria-label="Перезапустить ${escape(p.name)}">↻ Рестарт</button><button data-action="stop" data-id="${p.id}" title="Остановить" aria-label="Остановить ${escape(p.name)}">Ⅱ Стоп</button>` : `<button data-action="start" data-id="${p.id}" title="Запустить" aria-label="Запустить ${escape(p.name)}">▷ Старт</button>`}<button class="delete" data-action="delete" data-id="${p.id}" title="Удалить из PM2" aria-label="Удалить ${escape(p.name)}">× Удалить</button></div></td></tr>`).join('');
   filtered.forEach(p => {
     const actions = document.querySelector(`[data-action="logs"][data-id="${p.id}"]`)?.parentElement;
     if (servers.length > 1 && actions && !actions.querySelector('[data-action="transfer"]')) {
@@ -95,6 +95,16 @@ async function refreshGitUpdates(target = selected) {
     for (const p of processes) { const status = updates[String(p.id)]; if (status) cachedGit.set(p.id, status); }
     gitStatusCache.set(target, cachedGit);
     processes = processes.map(p => ({ ...p, git: cachedGit.get(p.id) }));
+    for (const p of processes.filter(item => item.git?.autoUpdate && item.git.updateAvailable === true)) {
+      try {
+        await api(endpoint(`/api/processes/${p.id}/update`, target), {});
+        const updatedGit = { ...(p.git || {}), available: true, updateAvailable: false, error: undefined };
+        cachedGit.set(p.id, updatedGit);
+        processes = processes.map(item => item.id === p.id ? { ...item, git: updatedGit } : item);
+      } catch (error) {
+        cachedGit.set(p.id, { ...(p.git || {}), error: error.message });
+      }
+    }
   } catch {} finally { if (gitLoadingTarget === target) { gitLoading = false; gitLoadingTarget = null; } if (target === selected) { gitReady = true; gitInitialLoading = false; renderProcesses(); } }
 }
 async function refresh() {
@@ -157,6 +167,17 @@ $('#process-rows').onclick = async event => {
   const id = Number(button.dataset.id), action = button.dataset.action, target = selected;
   const p = processes.find(p => p.id === id); if (!p) return;
   if (action === 'git-current') { toast('Версия приложения актуальна'); return; }
+  if (action === 'git-auto') {
+    const enabled = button.checked;
+    try {
+      await api(endpoint(`/api/processes/${id}/git-auto`, target), { enabled });
+      const updatedGit = { ...(p.git || {}), autoUpdate: enabled };
+      const cachedGit = gitStatusCache.get(target) || new Map(); cachedGit.set(id, updatedGit); gitStatusCache.set(target, cachedGit);
+      processes = processes.map(item => item.id === id ? { ...item, git: updatedGit } : item);
+      toast(enabled ? 'Автообновление Git включено' : 'Автообновление Git выключено');
+    } catch (error) { button.checked = !enabled; toast(error.message, true); }
+    return;
+  }
   if (action === 'edit') {
     processTarget = target; processEditId = id; editInterpreter = p.interpreter || ''; autoAppPath = p.cwd; autoScriptPath = p.script;
     const form = $('#process-form'); form.reset(); form.elements.name.value = p.name; form.elements.script.value = p.script || ''; form.elements.cwd.value = p.cwd || ''; $('#process-dialog-title').textContent = `Редактировать · ${p.name}`; $('#start-process').textContent = 'Сохранить изменения'; $('.github-source').open = false; $('.github-source').hidden = true; $('#process-target').textContent = `Сервер: ${servers.find(s => s.id === target)?.name}.`; $('#process-dialog').showModal(); loadNodeVersions(); return;

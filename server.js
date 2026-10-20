@@ -131,7 +131,9 @@ export function createServer({ resolveManager, settings, password, telegram, dem
         let updates = {};
         try { if (typeof manager.gitUpdates === 'function') updates = await manager.gitUpdates({ token: settings.github(true).token }); } catch {}
         const linked = settings.gitPaths(target.id);
+        const autoUpdates = settings.gitAutoUpdates(target.id);
         for (const [id, repository] of Object.entries(linked)) if (repository && !updates[id]?.available) updates[id] = { available: true, updateAvailable: null, error: 'Git подключён, но проверка репозитория не выполнена' };
+        for (const [id, value] of Object.entries(autoUpdates)) if (updates[id]) updates[id].autoUpdate = Boolean(value);
         return send(200, { updates });
       }
       const gitChangesMatch = /^\/api\/processes\/(\d+)\/git-changes$/.exec(url.pathname);
@@ -155,6 +157,13 @@ export function createServer({ resolveManager, settings, password, telegram, dem
         if (config.repository) await manager.installRepository(config.repository, config.destination, config.branch, { token: settings.github(true).token });
         const { repository, destination, branch, ...startConfig } = config;
         await manager.start(startConfig); return send(201, { ok: true });
+      }
+      const gitAutoMatch = /^\/api\/processes\/(\d+)\/git-auto$/.exec(url.pathname);
+      if (req.method === 'POST' && gitAutoMatch) {
+        const processId = Number(gitAutoMatch[1]);
+        const enabled = Boolean(body.enabled);
+        if (enabled && !settings.gitPaths(target.id)[String(processId)]) throw new Error('Сначала подключите Git-репозиторий');
+        return send(200, { enabled: await settings.saveGitAutoUpdate(target.id, processId, enabled) });
       }
       const editMatch = /^\/api\/processes\/(\d+)\/edit$/.exec(url.pathname);
       if (req.method === 'POST' && editMatch) {
