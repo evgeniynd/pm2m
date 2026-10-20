@@ -102,7 +102,7 @@ async function refreshGitUpdates(target = selected) {
         cachedGit.set(p.id, updatedGit);
         processes = processes.map(item => item.id === p.id ? { ...item, git: updatedGit } : item);
       } catch (error) {
-        cachedGit.set(p.id, { ...(p.git || {}), error: error.message });
+        cachedGit.set(p.id, { ...(p.git || {}), autoUpdateError: error.message });
       }
     }
   } catch {} finally { if (gitLoadingTarget === target) { gitLoading = false; gitLoadingTarget = null; } if (target === selected) { gitReady = true; gitInitialLoading = false; renderProcesses(); } }
