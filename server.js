@@ -177,7 +177,13 @@ export function createServer({ resolveManager, settings, password, telegram, dem
         const config = validateStart(body, target.type === 'ssh' ? path.posix : path);
         if (config.repository) throw new Error('Git-установку нельзя менять при редактировании приложения');
         if (config.interpreter && !(await manager.nodeVersions()).some(node => node.path === config.interpreter)) throw new Error('Выбранная версия Node.js больше недоступна. Обновите список версий.');
-        await manager.edit(Number(editMatch[1]), config); return send(200, { ok: true });
+        const edited = await manager.edit(Number(editMatch[1]), config);
+        if (edited?.status === 'errored') {
+          let detail = '';
+          try { const logs = await manager.logs(edited.id); detail = String(logs.stderr || '').trim().split('\n').filter(Boolean).slice(-3).join(' '); } catch {}
+          throw new Error(`Приложение не запустилось${detail ? `: ${detail.slice(-500)}` : '. Откройте логи приложения.'}`);
+        }
+        return send(200, { ok: true });
       }
       const transferMatch = /^\/api\/processes\/(\d+)\/transfer$/.exec(url.pathname);
       if (req.method === 'POST' && transferMatch) {
