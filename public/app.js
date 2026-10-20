@@ -95,16 +95,6 @@ async function refreshGitUpdates(target = selected) {
     for (const p of processes) { const status = updates[String(p.id)]; if (status) cachedGit.set(p.id, status); }
     gitStatusCache.set(target, cachedGit);
     processes = processes.map(p => ({ ...p, git: cachedGit.get(p.id) }));
-    for (const p of processes.filter(item => item.git?.autoUpdate && item.git.updateAvailable === true)) {
-      try {
-        await api(endpoint(`/api/processes/${p.id}/update`, target), {});
-        const updatedGit = { ...(p.git || {}), available: true, updateAvailable: false, error: undefined };
-        cachedGit.set(p.id, updatedGit);
-        processes = processes.map(item => item.id === p.id ? { ...item, git: updatedGit } : item);
-      } catch (error) {
-        cachedGit.set(p.id, { ...(p.git || {}), autoUpdateError: error.message });
-      }
-    }
   } catch {} finally { if (gitLoadingTarget === target) { gitLoading = false; gitLoadingTarget = null; } if (target === selected) { gitReady = true; gitInitialLoading = false; renderProcesses(); } }
 }
 async function refresh() {

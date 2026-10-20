@@ -24,6 +24,30 @@ async function githubJson(url, options = {}) {
 }
 export function createServer({ resolveManager, settings, password, telegram, demo = false, secure = false, sessions = memorySessions() }) {
   const attempts = new Map();
+  let autoUpdateRunning = false;
+  const runAutoUpdates = async () => {
+    if (autoUpdateRunning) return;
+    autoUpdateRunning = true;
+    try {
+      const token = settings.github(true).token;
+      for (const summary of settings.list()) {
+        const enabled = settings.gitAutoUpdates(summary.id);
+        const ids = Object.entries(enabled).filter(([, value]) => value).map(([id]) => Number(id)).filter(Number.isSafeInteger);
+        if (!ids.length) continue;
+        try {
+          const target = settings.get(summary.id);
+          const manager = await resolveManager(target);
+          const statuses = typeof manager.gitUpdates === 'function' ? await manager.gitUpdates({ token }) : {};
+          for (const id of ids) {
+            if (statuses[String(id)]?.updateAvailable !== true) continue;
+            await manager.update(id, { token });
+            console.log(`PM2M: auto-updated ${summary.name} process ${id}`);
+          }
+        } catch (error) { console.error(`PM2M: auto-update check failed for ${summary.name}: ${error.message}`); }
+      }
+    } finally { autoUpdateRunning = false; }
+  };
+  const autoUpdateTimer = setInterval(() => { void runAutoUpdates(); }, 30000).unref();
   const cookie = (value, age) => `pm2m_session=${value}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${age}${secure ? '; Secure' : ''}`;
   const maintenance = setInterval(() => {
     const now = Date.now();
@@ -222,7 +246,7 @@ export function createServer({ resolveManager, settings, password, telegram, dem
       send(404, { error: 'Не найдено' });
     } catch (error) { send(400, { error: error.message || 'Не удалось выполнить операцию' }); }
   });
-  server.on('close', () => clearInterval(maintenance));
+  server.on('close', () => { clearInterval(maintenance); clearInterval(autoUpdateTimer); });
   return server;
 }
 
