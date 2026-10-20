@@ -162,7 +162,14 @@ export function createServer({ resolveManager, settings, password, telegram, dem
       if (req.method === 'POST' && gitAutoMatch) {
         const processId = Number(gitAutoMatch[1]);
         const enabled = Boolean(body.enabled);
-        if (enabled && !settings.gitPaths(target.id)[String(processId)]) throw new Error('Сначала подключите Git-репозиторий');
+        if (enabled && !settings.gitPaths(target.id)[String(processId)]) {
+          let detected = false;
+          try {
+            const statuses = typeof manager.gitUpdates === 'function' ? await manager.gitUpdates({ token: settings.github(true).token }) : {};
+            detected = Boolean(statuses[String(processId)]?.available);
+          } catch {}
+          if (!detected) throw new Error('Сначала подключите Git-репозиторий');
+        }
         return send(200, { enabled: await settings.saveGitAutoUpdate(target.id, processId, enabled) });
       }
       const editMatch = /^\/api\/processes\/(\d+)\/edit$/.exec(url.pathname);
