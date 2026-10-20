@@ -180,7 +180,7 @@ $('#process-rows').onclick = async event => {
   }
   if (action === 'edit') {
     processTarget = target; processEditId = id; editInterpreter = p.interpreter || ''; autoAppPath = p.cwd; autoScriptPath = p.script;
-    const form = $('#process-form'); form.reset(); form.elements.name.value = p.name; form.elements.script.value = p.script || ''; form.elements.cwd.value = p.cwd || ''; $('#process-dialog-title').textContent = `Редактировать · ${p.name}`; $('#start-process').textContent = 'Сохранить изменения'; $('.github-source').open = false; $('.github-source').hidden = true; $('#process-target').textContent = `Сервер: ${servers.find(s => s.id === target)?.name}.`; $('#process-dialog').showModal(); loadNodeVersions(); return;
+    const form = $('#process-form'); form.reset(); form.elements.name.value = p.name; form.elements.script.value = p.script || ''; form.elements.cwd.value = p.cwd || ''; form.elements.args.value = Array.isArray(p.args) ? p.args.join(' ') : (p.args || ''); $('#process-dialog-title').textContent = `Редактировать · ${p.name}`; $('#start-process').textContent = 'Сохранить изменения'; $('.github-source').open = false; $('.github-source').hidden = true; $('#process-target').textContent = `Сервер: ${servers.find(s => s.id === target)?.name}.`; $('#process-dialog').showModal(); loadNodeVersions(); return;
   }
   if (action === 'logs') { logTarget = { id, server: target }; logStream = 'stdout'; logData = {}; $('#logs-title').textContent = p.name; $('#log-output').textContent = 'Загрузка…'; $('#log-analysis').hidden = true; $('#log-analysis').textContent = ''; $('#logs-dialog').showModal(); setLogStream('stdout'); await refreshLogs(); return; }
   if (action === 'transfer') {
