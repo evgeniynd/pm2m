@@ -187,7 +187,7 @@ $('#process-rows').onclick = async event => {
     const repository = prompt(`URL GitHub-репозитория для «${p.name}» на сервере «${servers.find(s => s.id === target)?.name}»:`, 'https://github.com/owner/repository.git');
     if (!repository?.trim()) return;
     busy = true; updateControls();
-    try { const result = await api(endpoint(`/api/processes/${id}/git`, target), { repository: repository.trim() }); processes = processes.map(item => item.id === id ? { ...item, git: result.git } : item); renderProcesses(); toast('Git-репозиторий добавлен'); await refresh(); }
+    try { const result = await api(endpoint(`/api/processes/${id}/git`, target), { repository: repository.trim() }); const cachedGit = gitStatusCache.get(target) || new Map(); cachedGit.set(id, result.git); gitStatusCache.set(target, cachedGit); processes = processes.map(item => item.id === id ? { ...item, git: result.git } : item); renderProcesses(); toast('Git-репозиторий добавлен'); await refresh(); }
     catch (error) { toast(error.message, true); } finally { busy = false; updateControls(); }
     return;
   }
@@ -208,7 +208,9 @@ $('#process-rows').onclick = async event => {
       if (!approved) return;
       confirmButton.disabled = true; cancelButton.disabled = true; $('#git-update-status').textContent = 'Устанавливаем изменения и перезапускаем приложение…'; $('#git-update-status').classList.add('loading');
       await api(endpoint(`/api/processes/${id}/update`, target), {});
-      processes = processes.map(item => item.id === id ? { ...item, git: { ...(item.git || {}), available: true, updateAvailable: false, error: undefined } } : item);
+      const updatedGit = { ...(p.git || {}), available: true, updateAvailable: false, error: undefined };
+      const cachedGit = gitStatusCache.get(target) || new Map(); cachedGit.set(id, updatedGit); gitStatusCache.set(target, cachedGit);
+      processes = processes.map(item => item.id === id ? { ...item, git: updatedGit } : item);
       renderProcesses(); toast('Приложение обновлено'); await refresh();
     } catch (error) { toast(error.message, true); } finally { $('#git-update-status').classList.remove('loading'); if (dialog.open) dialog.close(); dialog.oncancel = null; busy = false; updateControls(); }
     return;
