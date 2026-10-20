@@ -178,6 +178,8 @@ export function createServer({ resolveManager, settings, password, telegram, dem
         if (config.repository) throw new Error('Git-установку нельзя менять при редактировании приложения');
         if (config.interpreter && !(await manager.nodeVersions()).some(node => node.path === config.interpreter)) throw new Error('Выбранная версия Node.js больше недоступна. Обновите список версий.');
         const edited = await manager.edit(Number(editMatch[1]), config);
+        const wasAutoUpdated = settings.gitAutoUpdates(target.id)[String(editMatch[1])];
+        if (wasAutoUpdated && edited?.id !== undefined && edited.id !== Number(editMatch[1])) await settings.saveGitAutoUpdate(target.id, edited.id, true);
         if (edited?.status === 'errored') {
           let detail = '';
           try { const logs = await manager.logs(edited.id); detail = String(logs.stderr || '').trim().split('\n').filter(Boolean).slice(-3).join(' '); } catch {}
