@@ -48,6 +48,7 @@ export function createServer({ resolveManager, settings, password, telegram, dem
     } finally { autoUpdateRunning = false; }
   };
   const autoUpdateTimer = setInterval(() => { void runAutoUpdates(); }, 30000).unref();
+  void runAutoUpdates();
   const cookie = (value, age) => `pm2m_session=${value}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${age}${secure ? '; Secure' : ''}`;
   const maintenance = setInterval(() => {
     const now = Date.now();
