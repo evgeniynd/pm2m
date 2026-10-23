@@ -156,7 +156,13 @@ $('#process-rows').onclick = async event => {
   const button = event.target.closest('[data-action]'); if (!button || busy) return;
   const id = Number(button.dataset.id), action = button.dataset.action, target = selected;
   const p = processes.find(p => p.id === id); if (!p) return;
-  if (action === 'git-current') { toast('Версия приложения актуальна'); return; }
+  if (action === 'git-current') {
+    toast('Проверяем Git…');
+    await refreshGitUpdates(target);
+    const latest = processes.find(item => item.id === id)?.git;
+    toast(latest?.updateAvailable === true ? 'Найдено обновление из GitHub' : latest?.error || 'Версия приложения актуальна', latest?.error);
+    return;
+  }
   if (action === 'git-auto') {
     const enabled = button.checked;
     try {
