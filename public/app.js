@@ -72,7 +72,7 @@ function renderProcesses() {
       transfer.textContent = '⇢ Перенести'; transfer.title = 'Перенести приложение на другой сервер';
       actions.insertBefore(transfer, actions.firstElementChild);
     }
-    const button = document.querySelector(`[data-action="update"][data-id="${p.id}"]`); if (!button) return; if (gitInitialLoading) { button.classList.remove('git-update', 'git-current'); button.classList.add('git-loading'); button.innerHTML = '<span class="mini-spinner" aria-label="Проверка Git"></span>'; button.title = 'Проверяем Git…'; return; } const git = p.git; if (!git?.available) { button.classList.remove('git-update', 'git-current', 'git-loading'); button.dataset.action = 'add-git'; button.textContent = '＋ Git'; button.title = 'Указать URL GitHub-репозитория'; return; } if (git.error) { button.classList.remove('git-update', 'git-current', 'git-loading'); button.dataset.action = 'add-git'; button.textContent = '↻ Git'; button.title = git.error; return; } if (git.updateAvailable !== true) { button.dataset.action = 'git-current'; button.classList.remove('git-update', 'git-loading'); button.classList.add('git-current'); button.textContent = '✓ Актуально'; button.title = 'Версия актуальна'; return; } button.dataset.updateAvailable = 'true'; button.classList.remove('git-current', 'git-loading'); button.classList.add('git-update'); button.textContent = '↥ Обновить'; button.title = 'Есть обновление из GitHub';
+    const button = document.querySelector(`[data-action="update"][data-id="${p.id}"]`); if (!button) return; if (gitInitialLoading) { button.classList.remove('git-update', 'git-current'); button.classList.add('git-loading'); button.innerHTML = '<span class="mini-spinner" aria-label="Проверка Git"></span>'; button.title = 'Проверяем Git…'; return; } const git = p.git; if (!git?.available) { button.classList.remove('git-update', 'git-current', 'git-loading'); button.dataset.action = 'add-git'; button.textContent = '＋ Git'; button.title = 'Указать URL GitHub-репозитория'; return; } if (git.error) { button.classList.remove('git-update', 'git-current', 'git-loading'); button.dataset.action = 'git-check'; button.textContent = '↻ Проверить'; button.title = git.error; return; } if (git.updateAvailable !== true) { button.dataset.action = 'git-current'; button.classList.remove('git-update', 'git-loading'); button.classList.add('git-current'); button.textContent = '✓ Актуально'; button.title = 'Версия актуальна'; return; } button.dataset.updateAvailable = 'true'; button.classList.remove('git-current', 'git-loading'); button.classList.add('git-update'); button.textContent = '↥ Обновить'; button.title = 'Есть обновление из GitHub';
   });
   $('#empty-state').hidden = filtered.length > 0;
   updateControls();
@@ -92,7 +92,7 @@ async function refreshGitUpdates(target = selected) {
     const { updates } = await api(endpoint('/api/processes/git-updates', target));
     if (target !== selected) return;
     const cachedGit = gitStatusCache.get(target) || new Map();
-    for (const p of processes) { const status = updates[String(p.id)]; if (status) cachedGit.set(p.id, status); }
+    for (const p of processes) { const status = updates[String(p.id)]; if (status) cachedGit.set(p.id, status); else if (cachedGit.has(p.id)) cachedGit.set(p.id, { ...cachedGit.get(p.id), updateAvailable: null, error: 'Не удалось проверить Git' }); }
     gitStatusCache.set(target, cachedGit);
     processes = processes.map(p => ({ ...p, git: cachedGit.get(p.id) }));
   } catch {} finally { if (gitLoadingTarget === target) { gitLoading = false; gitLoadingTarget = null; } if (target === selected) { gitReady = true; gitInitialLoading = false; renderProcesses(); } }
@@ -156,7 +156,7 @@ $('#process-rows').onclick = async event => {
   const button = event.target.closest('[data-action]'); if (!button || busy) return;
   const id = Number(button.dataset.id), action = button.dataset.action, target = selected;
   const p = processes.find(p => p.id === id); if (!p) return;
-  if (action === 'git-current') {
+  if (action === 'git-current' || action === 'git-check') {
     toast('Проверяем Git…');
     await refreshGitUpdates(target);
     const latest = processes.find(item => item.id === id)?.git;
