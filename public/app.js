@@ -216,7 +216,22 @@ $('#process-rows').onclick = async event => {
     try {
       const data = await api(endpoint(`/api/processes/${id}/git-changes`, target));
       if (data.error) throw new Error(data.error);
-      const currentCommit = processes.find(item => item.id === id)?.git?.currentId || processes.find(item => item.id === id)?.git?.current || p.git?.currentId || p.git?.current;
+      const currentProcess = processes.find(item => item.id === id);
+      const currentCommit = currentProcess?.git?.currentId || currentProcess?.git?.current || p.git?.currentId || p.git?.current;
+      if (!data.commits?.length) {
+        $('#git-update-status').classList.remove('loading');
+        $('#git-update-status').textContent = `Не удалось получить коммиты для отката. Текущий commit: ${currentCommit || '—'}`;
+        selectedButton.disabled = true;
+        const choice = await new Promise(resolve => {
+          cancelButton.onclick = () => resolve(null);
+          currentButton.onclick = () => resolve({ commit: currentCommit, current: true });
+        });
+        if (choice?.commit) {
+          $('#git-update-status').textContent = 'Восстанавливаем текущий commit…';
+          await api(endpoint(`/api/processes/${id}/update`, target), { commit: choice.commit });
+        }
+        return;
+      }
       currentButton.disabled = !currentCommit;
       if (!data.commits?.length) { $('#git-update-status').classList.remove('loading'); $('#git-update-status').textContent = `Новых commit’ов не найдено. Текущий commit: ${currentCommit || '—'}`; await new Promise(resolve => { cancelButton.onclick = resolve; currentButton.onclick = () => resolve({ commit: currentCommit, current: true }); }); if (currentCommit) { $('#git-update-status').textContent = 'Восстанавливаем текущий commit…'; await api(endpoint(`/api/processes/${id}/update`, target), { commit: currentCommit }); } return; }
       commitSelect.innerHTML = data.commits.map(commit => `<option value="${escape(commit.id || commit.hash)}">${escape(commit.hash || commit.id)} · ${escape(commit.subject || 'Без сообщения')}</option>`).join(''); selectLabel.hidden = false; selectedButton.disabled = false;
