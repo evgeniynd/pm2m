@@ -160,7 +160,8 @@ $('#process-rows').onclick = async event => {
     toast('Проверяем Git…');
     await refreshGitUpdates(target, true);
     const latest = processes.find(item => item.id === id)?.git;
-    button.dataset.action = 'update'; button.click();
+    const refreshedButton = document.querySelector(`[data-id="${id}"][data-action="update"], [data-id="${id}"][data-action="git-current"], [data-id="${id}"][data-action="git-check"]`);
+    if (refreshedButton) { refreshedButton.dataset.action = 'update'; refreshedButton.click(); }
     return;
   }
   if (action === 'git-auto') {
