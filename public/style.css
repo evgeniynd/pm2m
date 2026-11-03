@@ -98,3 +98,4 @@
 .row-actions .git-auto-toggle{display:inline-flex;align-items:center;justify-content:center;gap:5px;min-height:34px;padding:6px 8px;border:1px solid #2b3343;background:#1a202c;border-radius:8px;color:#aeb9cd;font-size:11px;cursor:pointer;white-space:nowrap}.row-actions .git-auto-toggle input{width:auto;margin:0;accent-color:var(--accent);cursor:pointer}.row-actions .git-auto-toggle:has(input:checked){color:var(--green)}.row-actions .git-auto-toggle:has(input:disabled){opacity:.45;cursor:not-allowed}
 .row-actions .git-loading::after{content:"Проверка"}
 .git-update-dialog label{display:block;margin-top:18px}.git-update-dialog select{width:100%;margin-top:8px}
+.git-update-dialog .git-update-changes{display:none!important}
