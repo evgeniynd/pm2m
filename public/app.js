@@ -160,8 +160,7 @@ $('#process-rows').onclick = async event => {
     toast('Проверяем Git…');
     await refreshGitUpdates(target, true);
     const latest = processes.find(item => item.id === id)?.git;
-    if (latest?.updateAvailable === true) { button.dataset.action = 'update'; button.click(); return; }
-    toast(latest?.updateAvailable === true ? `Найдено обновление из GitHub · текущий commit ${latest?.current || '—'}` : latest?.error || `Версия приложения актуальна · commit ${latest?.current || '—'}`, latest?.error);
+    button.dataset.action = 'update'; button.click();
     return;
   }
   if (action === 'git-auto') {
@@ -216,7 +215,7 @@ $('#process-rows').onclick = async event => {
     try {
       const data = await api(endpoint(`/api/processes/${id}/git-changes`, target));
       if (data.error) throw new Error(data.error);
-      if (!data.commits?.length) { $('#git-update-status').classList.remove('loading'); $('#git-update-status').textContent = 'Новых коммитов не найдено.'; await new Promise(resolve => setTimeout(resolve, 1200)); return; }
+      if (!data.commits?.length) { $('#git-update-status').classList.remove('loading'); $('#git-update-status').textContent = `Новых commit’ов не найдено. Текущий commit: ${processes.find(item => item.id === id)?.git?.current || p.git?.current || '—'}`; await new Promise(resolve => { cancelButton.onclick = resolve; }); return; }
       commitSelect.innerHTML = data.commits.map(commit => `<option value="${escape(commit.id || commit.hash)}">${escape(commit.hash || commit.id)} · ${escape(commit.subject || 'Без сообщения')}</option>`).join(''); selectLabel.hidden = false; selectedButton.disabled = false;
       const changes = data.commits.map(commit => {
         const date = commit.date ? new Date(commit.date).toLocaleString('ru-RU') : '';
