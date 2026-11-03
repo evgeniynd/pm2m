@@ -210,22 +210,23 @@ $('#process-rows').onclick = async event => {
   }
   if (action === 'update') {
     busy = true; updateControls();
-    const dialog = $('#git-update-dialog'); const confirmButton = $('#git-update-confirm'); const cancelButton = $('#git-update-cancel');
-    $('#git-update-title').textContent = `Обновление · ${p.name}`; $('#git-update-status').textContent = 'Получаем список изменений…'; $('#git-update-status').classList.add('loading'); $('#git-update-changes').hidden = true; $('#git-update-changes').textContent = ''; confirmButton.disabled = true; cancelButton.disabled = false; dialog.oncancel = event => event.preventDefault(); dialog.showModal();
+    const dialog = $('#git-update-dialog'); const confirmButton = $('#git-update-confirm'); const selectedButton = $('#git-update-selected'); const cancelButton = $('#git-update-cancel'); const commitSelect = $('#git-update-commit'); const selectLabel = $('#git-update-select-label');
+    $('#git-update-title').textContent = `Обновление · ${p.name}`; $('#git-update-status').textContent = 'Получаем список изменений…'; $('#git-update-status').classList.add('loading'); $('#git-update-changes').hidden = true; $('#git-update-changes').textContent = ''; selectLabel.hidden = true; commitSelect.innerHTML = ''; confirmButton.disabled = true; selectedButton.disabled = true; cancelButton.disabled = false; dialog.oncancel = event => event.preventDefault(); dialog.showModal();
     try {
       const data = await api(endpoint(`/api/processes/${id}/git-changes`, target));
       if (data.error) throw new Error(data.error);
       if (!data.commits?.length) { $('#git-update-status').classList.remove('loading'); $('#git-update-status').textContent = 'Новых коммитов не найдено.'; await new Promise(resolve => setTimeout(resolve, 1200)); return; }
+      commitSelect.innerHTML = data.commits.map(commit => `<option value="${escape(commit.id || commit.hash)}">${escape(commit.hash || commit.id)} · ${escape(commit.subject || 'Без сообщения')}</option>`).join(''); selectLabel.hidden = false; selectedButton.disabled = false;
       const changes = data.commits.map(commit => {
         const date = commit.date ? new Date(commit.date).toLocaleString('ru-RU') : '';
         return `• ${commit.subject || 'Без сообщения'}\n  ${commit.hash || ''} · ${commit.author || 'Неизвестный автор'}${date ? ` · ${date}` : ''}`;
       }).join('\n');
       $('#git-update-status').classList.remove('loading'); $('#git-update-status').textContent = 'Проверьте изменения перед обновлением.'; $('#git-update-changes').textContent = changes; $('#git-update-changes').hidden = false; confirmButton.disabled = false;
-      const approved = await new Promise(resolve => { const finish = value => { confirmButton.onclick = null; cancelButton.onclick = null; resolve(value); }; confirmButton.onclick = () => finish(true); cancelButton.onclick = () => finish(false); });
-      if (!approved) return;
-      confirmButton.disabled = true; cancelButton.disabled = true; $('#git-update-status').textContent = 'Устанавливаем изменения и перезапускаем приложение…'; $('#git-update-status').classList.add('loading');
-      await api(endpoint(`/api/processes/${id}/update`, target), {});
-      const updatedGit = { ...(p.git || {}), available: true, updateAvailable: false, error: undefined };
+      const choice = await new Promise(resolve => { const finish = value => { confirmButton.onclick = null; selectedButton.onclick = null; cancelButton.onclick = null; resolve(value); }; confirmButton.onclick = () => finish({ commit: null }); selectedButton.onclick = () => finish({ commit: commitSelect.value }); cancelButton.onclick = () => finish(null); });
+      if (!choice) return;
+      confirmButton.disabled = true; selectedButton.disabled = true; cancelButton.disabled = true; $('#git-update-status').textContent = choice.commit ? 'Переходим на выбранный commit и перезапускаем приложение…' : 'Устанавливаем последний commit и перезапускаем приложение…'; $('#git-update-status').classList.add('loading');
+      await api(endpoint(`/api/processes/${id}/update`, target), choice.commit ? { commit: choice.commit } : {});
+      const updatedGit = { ...(p.git || {}), available: true, updateAvailable: Boolean(choice.commit), error: undefined };
       const cachedGit = gitStatusCache.get(target) || new Map(); cachedGit.set(id, updatedGit); gitStatusCache.set(target, cachedGit);
       processes = processes.map(item => item.id === id ? { ...item, git: updatedGit } : item);
       renderProcesses(); toast('Приложение обновлено'); await refresh();
