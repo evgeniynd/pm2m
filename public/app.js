@@ -212,7 +212,7 @@ $('#process-rows').onclick = async event => {
   if (action === 'update') {
     busy = true; updateControls();
     const dialog = $('#git-update-dialog'); const confirmButton = $('#git-update-confirm'); const selectedButton = $('#git-update-selected'); const currentButton = $('#git-update-current'); const cancelButton = $('#git-update-cancel'); const commitSelect = $('#git-update-commit'); const selectLabel = $('#git-update-select-label');
-    $('#git-update-title').textContent = `Обновление · ${p.name}`; $('#git-update-status').textContent = 'Получаем список изменений…'; $('#git-update-status').classList.add('loading'); $('#git-update-changes').hidden = true; $('#git-update-changes').textContent = ''; selectLabel.hidden = true; commitSelect.innerHTML = ''; confirmButton.disabled = true; selectedButton.disabled = true; currentButton.disabled = true; cancelButton.disabled = false; dialog.oncancel = event => event.preventDefault(); dialog.showModal();
+    $('#git-update-title').textContent = `Обновление · ${p.name}`; $('#git-update-status').textContent = 'Получаем список изменений…'; $('#git-update-status').classList.add('loading'); $('#git-update-changes').hidden = true; $('#git-update-changes').textContent = ''; selectLabel.hidden = true; commitSelect.innerHTML = ''; confirmButton.disabled = true; selectedButton.disabled = false; currentButton.disabled = true; cancelButton.disabled = false; dialog.oncancel = event => event.preventDefault(); dialog.showModal();
     try {
       const data = await api(endpoint(`/api/processes/${id}/git-changes`, target));
       if (data.error) throw new Error(data.error);
