@@ -160,7 +160,7 @@ $('#process-rows').onclick = async event => {
     toast('Проверяем Git…');
     await refreshGitUpdates(target, true);
     const latest = processes.find(item => item.id === id)?.git;
-    toast(latest?.updateAvailable === true ? 'Найдено обновление из GitHub' : latest?.error || `Версия приложения актуальна · commit ${latest?.current || '—'}`, latest?.error);
+    toast(latest?.updateAvailable === true ? `Найдено обновление из GitHub · текущий commit ${latest?.current || '—'}` : latest?.error || `Версия приложения актуальна · commit ${latest?.current || '—'}`, latest?.error);
     return;
   }
   if (action === 'git-auto') {
