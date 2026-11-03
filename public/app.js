@@ -157,11 +157,8 @@ $('#process-rows').onclick = async event => {
   const id = Number(button.dataset.id), action = button.dataset.action, target = selected;
   const p = processes.find(p => p.id === id); if (!p) return;
   if (action === 'git-current' || action === 'git-check') {
-    toast('Проверяем Git…');
-    await refreshGitUpdates(target, true);
-    const latest = processes.find(item => item.id === id)?.git;
-    const refreshedButton = document.querySelector(`[data-id="${id}"][data-action="update"], [data-id="${id}"][data-action="git-current"], [data-id="${id}"][data-action="git-check"]`);
-    if (refreshedButton) { refreshedButton.dataset.action = 'update'; refreshedButton.click(); }
+    button.dataset.action = 'update';
+    button.click();
     return;
   }
   if (action === 'git-auto') {
@@ -210,7 +207,7 @@ $('#process-rows').onclick = async event => {
     return;
   }
   if (action === 'update') {
-    const latestUpdateExpected = p.git?.updateAvailable === true;
+    let latestUpdateExpected = p.git?.updateAvailable === true;
     const latestUpdateGuard = setInterval(() => {
       const updateButton = $('#git-update-confirm');
       const updateDialog = $('#git-update-dialog');
@@ -223,6 +220,7 @@ $('#process-rows').onclick = async event => {
     try {
       const data = await api(endpoint(`/api/processes/${id}/git-changes`, target));
       if (data.error) throw new Error(data.error);
+      latestUpdateExpected = data.updateAvailable === true;
       const currentProcess = processes.find(item => item.id === id);
       const currentCommit = currentProcess?.git?.currentId || currentProcess?.git?.current || p.git?.currentId || p.git?.current;
       if (!data.commits?.length) {
