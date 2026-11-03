@@ -211,7 +211,12 @@ $('#process-rows').onclick = async event => {
   }
   if (action === 'update') {
     const latestUpdateExpected = p.git?.updateAvailable === true;
-    if (!latestUpdateExpected) setTimeout(() => { if (dialog.open) confirmButton.disabled = true; }, 0);
+    const latestUpdateGuard = setInterval(() => {
+      const updateButton = $('#git-update-confirm');
+      const updateDialog = $('#git-update-dialog');
+      if (!updateDialog?.open) { clearInterval(latestUpdateGuard); return; }
+      if (!latestUpdateExpected && updateButton) updateButton.disabled = true;
+    }, 50);
     busy = true; updateControls();
     const dialog = $('#git-update-dialog'); const confirmButton = $('#git-update-confirm'); const selectedButton = $('#git-update-selected'); const currentButton = $('#git-update-current'); const cancelButton = $('#git-update-cancel'); const commitSelect = $('#git-update-commit'); const selectLabel = $('#git-update-select-label');
     $('#git-update-title').textContent = `Обновление · ${p.name}`; $('#git-update-status').textContent = 'Получаем список изменений…'; $('#git-update-status').classList.add('loading'); $('#git-update-changes').hidden = true; $('#git-update-changes').textContent = ''; selectLabel.hidden = true; commitSelect.innerHTML = ''; confirmButton.disabled = true; selectedButton.disabled = false; currentButton.disabled = true; cancelButton.disabled = false; dialog.oncancel = event => event.preventDefault(); dialog.showModal();
