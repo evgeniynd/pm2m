@@ -225,7 +225,7 @@ $('#process-rows').onclick = async event => {
     try {
       const data = await api(endpoint(`/api/processes/${id}/git-changes`, target));
       if (data.error) throw new Error(data.error);
-      latestUpdateExpected = data.updateAvailable === true;
+      latestUpdateExpected = data.updateAvailable === true || Boolean(data.commits?.[0]?.id && data.currentId && data.commits[0].id !== data.currentId);
       const currentProcess = processes.find(item => item.id === id);
       const currentCommit = currentProcess?.git?.currentId || currentProcess?.git?.current || p.git?.currentId || p.git?.current;
       if (!data.commits?.length) {
