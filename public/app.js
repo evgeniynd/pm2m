@@ -212,7 +212,12 @@ $('#process-rows').onclick = async event => {
       const updateButton = $('#git-update-confirm');
       const updateDialog = $('#git-update-dialog');
       if (!updateDialog?.open) { clearInterval(latestUpdateGuard); return; }
-      if (!latestUpdateExpected && updateButton) updateButton.disabled = true;
+      if (!latestUpdateExpected && updateButton) {
+        updateButton.disabled = true;
+        updateButton.textContent = '✓ Актуально';
+        updateButton.classList.remove('primary');
+        updateButton.classList.add('git-current');
+      }
     }, 50);
     busy = true; updateControls();
     const dialog = $('#git-update-dialog'); const confirmButton = $('#git-update-confirm'); const selectedButton = $('#git-update-selected'); const currentButton = $('#git-update-current'); const cancelButton = $('#git-update-cancel'); const commitSelect = $('#git-update-commit'); const selectLabel = $('#git-update-select-label');

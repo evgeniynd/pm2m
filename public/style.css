@@ -99,3 +99,4 @@
 .row-actions .git-loading::after{content:"Проверка"}
 .git-update-dialog label{display:block;margin-top:18px}.git-update-dialog select{width:100%;margin-top:8px}
 .git-update-dialog .git-update-changes{display:none!important}
+.git-update-dialog button.git-current{color:var(--green);background:rgba(30,150,105,.18);border-color:rgba(72,205,153,.3)}
