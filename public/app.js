@@ -84,12 +84,12 @@ function updateControls() {
 }
 function showOperation(message) { $('#operation-message').textContent = message; const dialog = $('#operation-dialog'); if (!dialog.open) dialog.showModal(); }
 function hideOperation() { const dialog = $('#operation-dialog'); if (dialog.open) dialog.close(); }
-async function refreshGitUpdates(target = selected) {
-  if (!authenticated || !connected || target !== selected || gitLoadingTarget === target) return;
+async function refreshGitUpdates(target = selected, force = false) {
+  if (!authenticated || !connected || target !== selected || (gitLoadingTarget === target && !force)) return;
   gitLoading = true; gitLoadingTarget = target; gitInitialLoading = !gitReady;
   if (gitInitialLoading) renderProcesses();
   try {
-    const { updates } = await api(endpoint('/api/processes/git-updates', target));
+    const { updates } = await api(`${endpoint('/api/processes/git-updates', target)}${force ? `&check=${Date.now()}` : ''}`);
     if (target !== selected) return;
     const cachedGit = gitStatusCache.get(target) || new Map();
     for (const p of processes) { const status = updates[String(p.id)]; if (status) cachedGit.set(p.id, status); else if (cachedGit.has(p.id)) cachedGit.set(p.id, { ...cachedGit.get(p.id), updateAvailable: null, error: 'Не удалось проверить Git' }); }
@@ -158,7 +158,7 @@ $('#process-rows').onclick = async event => {
   const p = processes.find(p => p.id === id); if (!p) return;
   if (action === 'git-current' || action === 'git-check') {
     toast('Проверяем Git…');
-    await refreshGitUpdates(target);
+    await refreshGitUpdates(target, true);
     const latest = processes.find(item => item.id === id)?.git;
     toast(latest?.updateAvailable === true ? 'Найдено обновление из GitHub' : latest?.error || `Версия приложения актуальна · commit ${latest?.current || '—'}`, latest?.error);
     return;
