@@ -225,7 +225,9 @@ $('#process-rows').onclick = async event => {
     try {
       const data = await api(endpoint(`/api/processes/${id}/git-changes`, target));
       if (data.error) throw new Error(data.error);
-      latestUpdateExpected = data.updateAvailable === true || Boolean(data.commits?.[0]?.id && data.currentId && data.commits[0].id !== data.currentId);
+      const fetchedHead = data.commits?.[0]?.hash || data.commits?.[0]?.id?.slice(0, 7);
+      const knownHead = p.git?.current || processes.find(item => item.id === id)?.git?.current;
+      latestUpdateExpected = data.updateAvailable === true || Boolean(fetchedHead && knownHead && fetchedHead !== knownHead);
       const currentProcess = processes.find(item => item.id === id);
       const currentCommit = currentProcess?.git?.currentId || currentProcess?.git?.current || p.git?.currentId || p.git?.current;
       if (!data.commits?.length) {
