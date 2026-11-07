@@ -217,6 +217,11 @@ $('#process-rows').onclick = async event => {
         updateButton.textContent = '✓ Актуально';
         updateButton.classList.remove('primary');
         updateButton.classList.add('git-current');
+      } else if (latestUpdateExpected && updateButton) {
+        updateButton.disabled = false;
+        updateButton.textContent = '↥ Обновить до последнего';
+        updateButton.classList.remove('git-current');
+        updateButton.classList.add('primary');
       }
     }, 50);
     busy = true; updateControls();
