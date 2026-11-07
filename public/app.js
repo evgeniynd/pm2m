@@ -228,6 +228,9 @@ $('#process-rows').onclick = async event => {
       const fetchedHead = data.commits?.[0]?.hash || data.commits?.[0]?.id?.slice(0, 7);
       const knownHead = p.git?.current || processes.find(item => item.id === id)?.git?.current;
       latestUpdateExpected = data.updateAvailable === true || Boolean(fetchedHead && knownHead && fetchedHead !== knownHead);
+      const checkedGit = { ...(p.git || {}), available: true, updateAvailable: latestUpdateExpected, current: data.currentId?.slice(0, 7) || p.git?.current, currentId: data.currentId || p.git?.currentId, latest: data.latestId?.slice(0, 7) || fetchedHead, latestId: data.latestId || data.commits?.[0]?.id, error: undefined };
+      const checkedCache = gitStatusCache.get(target) || new Map(); checkedCache.set(id, checkedGit); gitStatusCache.set(target, checkedCache);
+      processes = processes.map(item => item.id === id ? { ...item, git: checkedGit } : item); renderProcesses();
       const currentProcess = processes.find(item => item.id === id);
       const currentCommit = currentProcess?.git?.currentId || currentProcess?.git?.current || p.git?.currentId || p.git?.current;
       if (!data.commits?.length) {
