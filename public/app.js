@@ -249,7 +249,8 @@ $('#process-rows').onclick = async event => {
       }
       currentButton.disabled = !currentCommit;
       if (!data.commits?.length) { $('#git-update-status').classList.remove('loading'); $('#git-update-status').textContent = `Новых commit’ов не найдено. Текущий commit: ${currentCommit || '—'}`; await new Promise(resolve => { cancelButton.onclick = resolve; currentButton.onclick = () => resolve({ commit: currentCommit, current: true }); }); if (currentCommit) { $('#git-update-status').textContent = 'Восстанавливаем текущий commit…'; await api(endpoint(`/api/processes/${id}/update`, target), { commit: currentCommit }); } return; }
-      commitSelect.innerHTML = data.commits.map(commit => `<option value="${escape(commit.id || commit.hash)}">${escape(commit.hash || commit.id)} · ${escape(commit.subject || 'Без сообщения')}</option>`).join(''); selectLabel.hidden = false; selectedButton.disabled = false;
+      const currentShort = currentCommit?.slice(0, 7);
+      commitSelect.innerHTML = data.commits.map(commit => `<option value="${escape(commit.id || commit.hash)}">${commit.hash === currentShort ? '✓ ' : ''}${escape(commit.hash || commit.id)} · ${escape(commit.subject || 'Без сообщения')}</option>`).join(''); selectLabel.hidden = false; selectedButton.disabled = false;
       const changes = data.commits.map(commit => {
         const date = commit.date ? new Date(commit.date).toLocaleString('ru-RU') : '';
         return `• ${commit.subject || 'Без сообщения'}\n  ${commit.hash || ''} · ${commit.author || 'Неизвестный автор'}${date ? ` · ${date}` : ''}`;
