@@ -71,6 +71,10 @@ function renderProcesses() {
       transfer.dataset.action = 'transfer'; transfer.dataset.id = p.id;
       transfer.textContent = '⇢ Перенести'; transfer.title = 'Перенести приложение на другой сервер';
       actions.insertBefore(transfer, actions.firstElementChild);
+      const clone = document.createElement('button');
+      clone.dataset.action = 'clone'; clone.dataset.id = p.id;
+      clone.textContent = '⧉ Клонировать'; clone.title = 'Клонировать приложение на другой сервер';
+      actions.insertBefore(clone, actions.firstElementChild);
     }
     if (actions && !actions.querySelector('[data-action="install-dependencies"]')) {
       const install = document.createElement('button');
@@ -184,11 +188,11 @@ $('#process-rows').onclick = async event => {
     const form = $('#process-form'); form.reset(); form.elements.name.value = p.name; form.elements.script.value = p.script || ''; form.elements.cwd.value = p.cwd || ''; form.elements.args.value = Array.isArray(p.args) ? p.args.join(' ') : (p.args || ''); $('#process-dialog-title').textContent = `Редактировать · ${p.name}`; $('#start-process').textContent = 'Сохранить изменения'; $('.github-source').open = false; $('.github-source').hidden = true; $('#process-target').textContent = `Сервер: ${servers.find(s => s.id === target)?.name}.`; $('#process-dialog').showModal(); loadNodeVersions(); return;
   }
   if (action === 'logs') { logTarget = { id, server: target }; logStream = 'stdout'; logData = {}; $('#logs-title').textContent = p.name; $('#log-output').textContent = 'Загрузка…'; $('#log-analysis').hidden = true; $('#log-analysis').textContent = ''; $('#logs-dialog').showModal(); setLogStream('stdout'); await refreshLogs(); return; }
-  if (action === 'transfer') {
+  if (action === 'transfer' || action === 'clone') {
     const candidates = servers.filter(server => server.id !== target);
     if (!candidates.length) return;
     const dialog = $('#transfer-dialog'); const form = $('#transfer-form'); const serverSelect = $('#transfer-server'); const pathInput = $('#transfer-path'); const nodeSelect = $('#transfer-node'); const nodeStatus = $('#transfer-node-status'); const confirmButton = $('#transfer-confirm'); const error = $('#transfer-error'); let transferVersionsRequest = 0;
-    $('#transfer-title').textContent = `Перенести · ${p.name}`;
+    $('#transfer-title').textContent = `${action === 'clone' ? 'Клонировать' : 'Перенести'} · ${p.name}`;
     serverSelect.innerHTML = candidates.map(server => `<option value="${escape(server.id)}">${escape(server.name)}${server.host ? ` · ${escape(server.host)}` : ''}</option>`).join('');
     const updatePath = () => { const server = candidates.find(item => item.id === serverSelect.value); pathInput.value = server?.appRoot || '/projects'; };
     const loadTransferVersions = async () => { const request = ++transferVersionsRequest; const destinationId = serverSelect.value; nodeSelect.disabled = true; confirmButton.disabled = true; nodeSelect.innerHTML = '<option value="">Проверяем установленные версии…</option>'; nodeStatus.textContent = 'Поиск Node.js на сервере назначения…'; try { const data = await api(endpoint('/api/node-versions', destinationId)); if (request !== transferVersionsRequest) return; const versions = Array.isArray(data.versions) ? data.versions : []; nodeSelect.innerHTML = versions.length ? versions.map(node => `<option value="${escape(node.path)}">${escape(node.version)}${node.default ? ' · по умолчанию' : ''} — ${escape(node.path)}</option>`).join('') : '<option value="">Node.js не найден</option>'; nodeSelect.disabled = !versions.length; confirmButton.disabled = !versions.length; nodeStatus.textContent = versions.length ? `Найдено версий: ${versions.length}` : 'На сервере не найдены версии Node.js'; } catch (loadError) { if (request !== transferVersionsRequest) return; nodeSelect.innerHTML = '<option value="">Не удалось получить версии</option>'; nodeStatus.textContent = loadError.message; confirmButton.disabled = true; } };
@@ -201,7 +205,7 @@ $('#process-rows').onclick = async event => {
     const destination = selected && candidates.find(server => server.id === selected.id);
     if (!destination) return;
     busy = true; updateControls();
-    try { showOperation(`Переносим «${p.name}» на «${destination.name}»…`); await api(endpoint(`/api/processes/${id}/transfer`, target), { targetServer: destination.id, targetRoot: selected.root, interpreter: selected.interpreter }); toast(`Приложение перенесено на «${destination.name}»`); await loadServers(); await refresh(); }
+    try { showOperation(`${action === 'clone' ? 'Клонируем' : 'Переносим'} «${p.name}» на «${destination.name}»…`); await api(endpoint(`/api/processes/${id}/transfer`, target), { targetServer: destination.id, targetRoot: selected.root, interpreter: selected.interpreter, clone: action === 'clone' }); toast(`${action === 'clone' ? 'Приложение клонировано' : 'Приложение перенесено'} на «${destination.name}»`); await loadServers(); await refresh(); }
     catch (error) { toast(error.message, true); } finally { hideOperation(); busy = false; updateControls(); }
     return;
   }

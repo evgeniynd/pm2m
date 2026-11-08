@@ -231,7 +231,7 @@ export function createServer({ resolveManager, settings, password, telegram, dem
         if (sourceProcess.status !== 'online') {
           if (destinationProcess) await destinationManager.action(destinationProcess.id, 'stop');
         }
-        await manager.action(processId, 'delete');
+        if (!body.clone) await manager.action(processId, 'delete');
         return send(200, { ok: true, server: destination.name });
       }
       if (req.method === 'POST' && url.pathname === '/api/save') { await manager.save(); return send(200, { ok: true }); }
