@@ -194,7 +194,7 @@ $('#process-rows').onclick = async event => {
     const destination = selected && candidates.find(server => server.id === selected.id);
     if (!destination) return;
     busy = true; updateControls();
-    try { showOperation(`Переносим «${p.name}» на «${destination.name}»…`); await api(endpoint(`/api/processes/${id}/transfer`, target), { targetServer: destination.id, targetRoot: selected.root }); toast(`Приложение перенесено на «${destination.name}»`); await loadServers(); await refresh(); }
+    try { showOperation(`Переносим «${p.name}» на «${destination.name}»…`); await api(endpoint(`/api/processes/${id}/transfer`, target), { targetServer: destination.id, targetRoot: selected.root, interpreter: selected.interpreter }); toast(`Приложение перенесено на «${destination.name}»`); await loadServers(); await refresh(); }
     catch (error) { toast(error.message, true); } finally { hideOperation(); busy = false; updateControls(); }
     return;
   }
