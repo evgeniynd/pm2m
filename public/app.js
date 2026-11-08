@@ -88,8 +88,8 @@ function updateControls() {
   $('#save-processes').disabled = !connected || busy;
   document.querySelectorAll('[data-action]').forEach(button => { button.disabled = !connected || busy || (button.dataset.action === 'update' && button.dataset.updateAvailable !== 'true'); });
 }
-function showOperation(message) { $('#operation-message').textContent = message; const dialog = $('#operation-dialog'); if (!dialog.open) dialog.showModal(); }
-function hideOperation() { const dialog = $('#operation-dialog'); if (dialog.open) dialog.close(); }
+function showOperation(message) { $('#operation-message').textContent = message; const dialog = $('#operation-dialog'); dialog.oncancel = event => event.preventDefault(); if (!dialog.open) dialog.showModal(); }
+function hideOperation() { const dialog = $('#operation-dialog'); dialog.oncancel = null; if (dialog.open) dialog.close(); }
 async function refreshGitUpdates(target = selected, force = false) {
   if (!authenticated || !connected || target !== selected || (gitLoadingTarget === target && !force)) return;
   gitLoading = true; gitLoadingTarget = target; gitInitialLoading = !gitReady;
