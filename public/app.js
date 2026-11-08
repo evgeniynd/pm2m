@@ -208,6 +208,7 @@ $('#process-rows').onclick = async event => {
   }
   if (action === 'update') {
     let latestUpdateExpected = p.git?.updateAvailable === true;
+    let pendingCommits = [];
     const latestUpdateGuard = setInterval(() => {
       const updateButton = $('#git-update-confirm');
       const updateDialog = $('#git-update-dialog');
@@ -222,6 +223,13 @@ $('#process-rows').onclick = async event => {
         updateButton.textContent = '↥ Обновить до последнего';
         updateButton.classList.remove('git-current');
         updateButton.classList.add('primary');
+      }
+      const changesElement = $('#git-update-changes');
+      if (pendingCommits.length && changesElement) {
+        changesElement.textContent = pendingCommits.map(commit => `• ${commit.hash || commit.id} · ${commit.subject || 'Без сообщения'}`).join('\n');
+        changesElement.hidden = false;
+      } else if (changesElement) {
+        changesElement.hidden = true;
       }
     }, 50);
     busy = true; updateControls();
@@ -238,6 +246,11 @@ $('#process-rows').onclick = async event => {
       processes = processes.map(item => item.id === id ? { ...item, git: checkedGit } : item); renderProcesses();
       const currentProcess = processes.find(item => item.id === id);
       const currentCommit = currentProcess?.git?.currentId || currentProcess?.git?.current || p.git?.currentId || p.git?.current;
+      const installedId = data.currentId || currentProcess?.git?.currentId || p.git?.currentId || '';
+      const installedShort = installedId.slice(0, 7);
+      const remoteCommits = Array.isArray(data.commits) ? data.commits : [];
+      const installedIndex = remoteCommits.findIndex(commit => (commit.id || '').startsWith(installedId) || commit.hash === installedShort);
+      pendingCommits = installedIndex >= 0 ? remoteCommits.slice(0, installedIndex) : remoteCommits;
       if (!data.commits?.length) {
         $('#git-update-status').classList.remove('loading');
         $('#git-update-status').textContent = `Не удалось получить коммиты для отката. Текущий commit: ${currentCommit || '—'}`;
