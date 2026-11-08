@@ -236,6 +236,14 @@ export function createServer({ resolveManager, settings, password, telegram, dem
         return send(200, { ok: true, server: destination.name });
       }
       if (req.method === 'POST' && url.pathname === '/api/save') { await manager.save(); return send(200, { ok: true }); }
+      const dependenciesMatch = /^\/api\/processes\/(\d+)\/install-dependencies$/.exec(url.pathname);
+      if (req.method === 'POST' && dependenciesMatch) {
+        const process = (await manager.list()).find(item => item.id === Number(dependenciesMatch[1]));
+        if (!process?.cwd) throw new Error('Рабочая папка приложения не найдена');
+        if (typeof manager.installDependencies !== 'function') throw new Error('Переустановка пакетов недоступна для этого сервера');
+        await manager.installDependencies(process.cwd);
+        return send(200, { ok: true });
+      }
       const match = /^\/api\/processes\/(\d+)\/(start|stop|restart|reload|delete|update|logs)$/.exec(url.pathname);
       if (match && Number.isSafeInteger(Number(match[1]))) {
         if (req.method === 'GET' && match[2] === 'logs') return send(200, await manager.logs(Number(match[1])));

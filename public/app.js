@@ -72,6 +72,12 @@ function renderProcesses() {
       transfer.textContent = '⇢ Перенести'; transfer.title = 'Перенести приложение на другой сервер';
       actions.insertBefore(transfer, actions.firstElementChild);
     }
+    if (actions && !actions.querySelector('[data-action="install-dependencies"]')) {
+      const install = document.createElement('button');
+      install.dataset.action = 'install-dependencies'; install.dataset.id = p.id;
+      install.textContent = '⇩ Пакеты'; install.title = 'Переустановить npm-пакеты';
+      actions.insertBefore(install, actions.firstElementChild);
+    }
     const button = document.querySelector(`[data-action="update"][data-id="${p.id}"]`); if (!button) return; if (gitInitialLoading) { button.classList.remove('git-update', 'git-current'); button.classList.add('git-loading'); button.innerHTML = '<span class="mini-spinner" aria-label="Проверка Git"></span>'; button.title = 'Проверяем Git…'; return; } const git = p.git; if (!git?.available) { button.classList.remove('git-update', 'git-current', 'git-loading'); button.dataset.action = 'add-git'; button.textContent = '＋ Git'; button.title = 'Указать URL GitHub-репозитория'; return; } if (git.error) { button.classList.remove('git-update', 'git-current', 'git-loading'); button.dataset.action = 'git-check'; button.textContent = '↻ Проверить'; button.title = git.error; return; } if (git.updateAvailable !== true) { button.dataset.action = 'git-current'; button.classList.remove('git-update', 'git-loading'); button.classList.add('git-current'); button.textContent = '✓ Актуально'; button.title = 'Версия актуальна'; return; } button.dataset.updateAvailable = 'true'; button.classList.remove('git-current', 'git-loading'); button.classList.add('git-update'); button.textContent = '↥ Обновить'; button.title = 'Есть обновление из GitHub';
   });
   $('#empty-state').hidden = filtered.length > 0;
@@ -204,6 +210,12 @@ $('#process-rows').onclick = async event => {
     busy = true; updateControls();
     try { const result = await api(endpoint(`/api/processes/${id}/git`, target), { repository: repository.trim() }); const cachedGit = gitStatusCache.get(target) || new Map(); cachedGit.set(id, result.git); gitStatusCache.set(target, cachedGit); processes = processes.map(item => item.id === id ? { ...item, git: result.git } : item); renderProcesses(); toast('Git-репозиторий добавлен'); await refresh(); }
     catch (error) { toast(error.message, true); } finally { busy = false; updateControls(); }
+    return;
+  }
+  if (action === 'install-dependencies') {
+    busy = true; updateControls();
+    try { showOperation(`Устанавливаем пакеты для «${p.name}»…`); await api(endpoint(`/api/processes/${id}/install-dependencies`, target), {}); toast('Пакеты переустановлены'); await refresh(); }
+    catch (error) { toast(error.message, true); } finally { hideOperation(); busy = false; updateControls(); }
     return;
   }
   if (action === 'update') {
