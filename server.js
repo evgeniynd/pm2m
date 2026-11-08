@@ -225,7 +225,6 @@ export function createServer({ resolveManager, settings, password, telegram, dem
         if (!interpreter || !interpreter.startsWith('/') || /[\x00\r\n]/.test(interpreter)) throw new Error('Выберите версию Node.js на сервере назначения');
         const destinationManager = await resolveManager(destination);
         const moved = await transferSshApplication(target, destination, sourceProcess, targetRoot);
-        if (typeof destinationManager.installDependencies === 'function') await destinationManager.installDependencies(moved.cwd);
         await destinationManager.start({ name: sourceProcess.name, script: moved.script, cwd: moved.cwd, interpreter, args: sourceProcess.args });
         const destinationProcess = (await destinationManager.list()).find(item => item.name === sourceProcess.name && item.cwd === moved.cwd);
         if (sourceRepository && destinationProcess) await settings.saveGitPath(destination.id, destinationProcess.id, sourceRepository);
