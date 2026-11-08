@@ -88,7 +88,8 @@ function updateControls() {
   $('#save-processes').disabled = !connected || busy;
   document.querySelectorAll('[data-action]').forEach(button => { button.disabled = !connected || busy || (button.dataset.action === 'update' && button.dataset.updateAvailable !== 'true'); });
 }
-function showOperation(message) { $('#operation-message').textContent = message; const dialog = $('#operation-dialog'); dialog.oncancel = event => event.preventDefault(); if (!dialog.open) dialog.showModal(); }
+function showOperation(message) { $('#operation-message').textContent = message; $('#operation-result').hidden = true; $('#operation-result').textContent = ''; $('#operation-spinner').hidden = false; $('#operation-close').hidden = true; const dialog = $('#operation-dialog'); dialog.oncancel = event => event.preventDefault(); if (!dialog.open) dialog.showModal(); }
+function showOperationResult(result) { $('#operation-spinner').hidden = true; $('#operation-message').textContent = 'Установка пакетов завершена'; $('#operation-result').textContent = result || 'npm не вывел текстовый результат.'; $('#operation-result').hidden = false; $('#operation-close').hidden = false; $('#operation-close').onclick = hideOperation; }
 function hideOperation() { const dialog = $('#operation-dialog'); dialog.oncancel = null; if (dialog.open) dialog.close(); }
 async function refreshGitUpdates(target = selected, force = false) {
   if (!authenticated || !connected || target !== selected || (gitLoadingTarget === target && !force)) return;
@@ -214,8 +215,9 @@ $('#process-rows').onclick = async event => {
   }
   if (action === 'install-dependencies') {
     busy = true; updateControls();
-    try { showOperation(`Устанавливаем пакеты для «${p.name}»…`); await api(endpoint(`/api/processes/${id}/install-dependencies`, target), {}); toast('Пакеты переустановлены'); await refresh(); }
-    catch (error) { toast(error.message, true); } finally { hideOperation(); busy = false; updateControls(); }
+    let completed = false;
+    try { showOperation(`Устанавливаем пакеты для «${p.name}»…`); const result = await api(endpoint(`/api/processes/${id}/install-dependencies`, target), {}); showOperationResult(result.installation?.output); completed = true; await refresh(); }
+    catch (error) { hideOperation(); toast(error.message, true); } finally { if (!completed) hideOperation(); busy = false; updateControls(); }
     return;
   }
   if (action === 'update') {

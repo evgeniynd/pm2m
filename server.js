@@ -241,8 +241,8 @@ export function createServer({ resolveManager, settings, password, telegram, dem
         const process = (await manager.list()).find(item => item.id === Number(dependenciesMatch[1]));
         if (!process?.cwd) throw new Error('Рабочая папка приложения не найдена');
         if (typeof manager.installDependencies !== 'function') throw new Error('Переустановка пакетов недоступна для этого сервера');
-        await manager.installDependencies(process.cwd);
-        return send(200, { ok: true });
+        const installation = await manager.installDependencies(process.cwd);
+        return send(200, { ok: true, installation });
       }
       const match = /^\/api\/processes\/(\d+)\/(start|stop|restart|reload|delete|update|logs)$/.exec(url.pathname);
       if (match && Number.isSafeInteger(Number(match[1]))) {
