@@ -100,5 +100,5 @@
 .git-update-dialog label{display:block;margin-top:18px}.git-update-dialog select{width:100%;margin-top:8px}
 .git-update-dialog button.git-current{color:var(--green);background:rgba(30,150,105,.18);border-color:rgba(72,205,153,.3)}
 .git-update-dialog #git-update-confirm.primary{background:var(--panel);border-color:var(--border);color:#f3ad61;box-shadow:none}
-.git-update-dialog #git-update-confirm.primary:hover{background:var(--panel-hover);border-color:#f3ad61;color:#f3ad61}
+.git-update-dialog #git-update-confirm.primary:hover{background:#303749;border-color:#f3ad61;color:#f3ad61}
 .operation-result{max-width:min(680px,80vw);max-height:45vh;overflow:auto;text-align:left;white-space:pre-wrap;background:#0e121b;border:1px solid #2d3546;border-radius:8px;padding:12px;font-size:12px;color:#c9cede}
