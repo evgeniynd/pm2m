@@ -81,6 +81,10 @@ function renderProcesses() {
       install.dataset.action = 'install-dependencies'; install.dataset.id = p.id;
       install.textContent = '⇩ Пакеты'; install.title = 'Переустановить npm-пакеты';
       actions.insertBefore(install, actions.firstElementChild);
+      const env = document.createElement('button');
+      env.dataset.action = 'env'; env.dataset.id = p.id;
+      env.textContent = '⚙ .env'; env.title = 'Редактировать файл .env';
+      actions.insertBefore(env, actions.firstElementChild);
     }
     const button = document.querySelector(`[data-action="update"][data-id="${p.id}"]`); if (!button) return; if (gitInitialLoading) { button.classList.remove('git-update', 'git-current'); button.classList.add('git-loading'); button.innerHTML = '<span class="mini-spinner" aria-label="Проверка Git"></span>'; button.title = 'Проверяем Git…'; return; } const git = p.git; if (!git?.available) { button.classList.remove('git-update', 'git-current', 'git-loading'); button.dataset.action = 'add-git'; button.textContent = '＋ Git'; button.title = 'Указать URL GitHub-репозитория'; return; } if (git.error) { button.classList.remove('git-update', 'git-current', 'git-loading'); button.dataset.action = 'git-check'; button.textContent = '↻ Проверить'; button.title = git.error; return; } if (git.updateAvailable !== true) { button.dataset.action = 'git-current'; button.classList.remove('git-update', 'git-loading'); button.classList.add('git-current'); button.textContent = '✓ Актуально'; button.title = 'Версия актуальна'; return; } button.dataset.updateAvailable = 'true'; button.classList.remove('git-current', 'git-loading'); button.classList.add('git-update'); button.textContent = '↥ Обновить'; button.title = 'Есть обновление из GitHub';
   });
@@ -215,6 +219,17 @@ $('#process-rows').onclick = async event => {
     busy = true; updateControls();
     try { const result = await api(endpoint(`/api/processes/${id}/git`, target), { repository: repository.trim() }); const cachedGit = gitStatusCache.get(target) || new Map(); cachedGit.set(id, result.git); gitStatusCache.set(target, cachedGit); processes = processes.map(item => item.id === id ? { ...item, git: result.git } : item); renderProcesses(); toast('Git-репозиторий добавлен'); await refresh(); }
     catch (error) { toast(error.message, true); } finally { busy = false; updateControls(); }
+    return;
+  }
+  if (action === 'env') {
+    const dialog = $('#env-dialog'); const form = $('#env-form'); const content = $('#env-content'); const status = $('#env-status'); const error = $('#env-error');
+    $('#env-title').textContent = `.env · ${p.name}`; content.value = ''; error.textContent = ''; status.textContent = 'Загрузка .env…'; content.disabled = true; $('#env-save').disabled = true; dialog.showModal();
+    try {
+      const data = await api(endpoint(`/api/processes/${id}/env`, target)); content.value = data.content || ''; status.textContent = data.created ? 'Создано из .env.example. Отредактируйте и сохраните файл.' : 'Файл .env загружен.'; content.disabled = false; $('#env-save').disabled = false;
+    } catch (loadError) { status.textContent = 'Не удалось открыть .env'; error.textContent = loadError.message; }
+    const finish = () => { if (dialog.open) dialog.close(); form.onsubmit = null; $('#env-cancel').onclick = null; $('#env-close').onclick = null; };
+    $('#env-cancel').onclick = finish; $('#env-close').onclick = finish;
+    form.onsubmit = async event => { event.preventDefault(); $('#env-save').disabled = true; error.textContent = ''; try { await api(endpoint(`/api/processes/${id}/env`, target), { content: content.value }); status.textContent = 'Файл .env сохранён.'; toast('.env сохранён'); } catch (saveError) { error.textContent = saveError.message; } finally { $('#env-save').disabled = false; } };
     return;
   }
   if (action === 'install-dependencies') {

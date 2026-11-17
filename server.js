@@ -243,6 +243,14 @@ export function createServer({ resolveManager, settings, password, telegram, dem
         const installation = await manager.installDependencies(process.cwd);
         return send(200, { ok: true, installation });
       }
+      const envMatch = /^\/api\/processes\/(\d+)\/env$/.exec(url.pathname);
+      if (envMatch) {
+        const process = (await manager.list()).find(item => item.id === Number(envMatch[1]));
+        if (!process?.cwd) throw new Error('Рабочая папка приложения не найдена');
+        if (typeof manager.readEnv !== 'function' || typeof manager.writeEnv !== 'function') throw new Error('Редактор .env недоступен для этого сервера');
+        if (req.method === 'GET') return send(200, await manager.readEnv(process.cwd));
+        if (req.method === 'POST') { await manager.writeEnv(process.cwd, String(body.content ?? '')); return send(200, { ok: true }); }
+      }
       const match = /^\/api\/processes\/(\d+)\/(start|stop|restart|reload|delete|update|logs)$/.exec(url.pathname);
       if (match && Number.isSafeInteger(Number(match[1]))) {
         if (req.method === 'GET' && match[2] === 'logs') return send(200, await manager.logs(Number(match[1])));
