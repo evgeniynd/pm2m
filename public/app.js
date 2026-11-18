@@ -100,7 +100,7 @@ function showOperation(message) { $('#operation-message').textContent = message;
 function showOperationResult(result) { $('#operation-spinner').hidden = true; $('#operation-message').textContent = 'Установка пакетов завершена'; $('#operation-result').textContent = result || 'npm не вывел текстовый результат.'; $('#operation-result').hidden = false; $('#operation-close').hidden = false; $('#operation-close').onclick = hideOperation; }
 function hideOperation() { const dialog = $('#operation-dialog'); dialog.oncancel = null; if (dialog.open) dialog.close(); }
 async function refreshGitUpdates(target = selected, force = false) {
-  if (!authenticated || !connected || target !== selected || (gitLoadingTarget === target && !force)) return;
+  if (!authenticated || !connected || target !== selected || gitLoadingTarget === target) return;
   gitLoading = true; gitLoadingTarget = target; gitInitialLoading = !gitReady;
   if (gitInitialLoading) renderProcesses();
   try {
