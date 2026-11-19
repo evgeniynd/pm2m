@@ -2,7 +2,7 @@ const $ = selector => document.querySelector(selector);
 const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
 let servers = [], processes = [], selected = localStorage.getItem('pm2m-server') || 'local';
 const gitStatusCache = new Map();
-let authenticated = false, connected = false, requestId = 0, busy = false, loading = false, gitLoading = false, gitLoadingTarget = null, gitInitialLoading = false, gitReady = false;
+let authenticated = false, connected = false, requestId = 0, busy = false, loading = false, gitLoading = false, gitLoadingTarget = null, gitInitialLoading = false, gitReady = false, panelUpdate = null, panelUpdateLoading = false;
 let logTarget = null, logStream = 'stdout', logData = {}, logLoading = false, toastTimer;
 let processTarget = null, processEditId = null, editInterpreter = '', versionsRequest = 0, versionsLoading = false, autoAppPath = '', autoScriptPath = '';
 
@@ -21,6 +21,40 @@ function toast(message, error = false) {
   clearTimeout(toastTimer); $('#toast').textContent = message; $('#toast').classList.toggle('error', error); $('#toast').hidden = false;
   toastTimer = setTimeout(() => { $('#toast').hidden = true; }, 5000);
 }
+function renderPanelUpdate(status) {
+  panelUpdate = status;
+  const notice = $('#panel-update-notice');
+  notice.hidden = !status?.updateAvailable;
+  if (status?.updateAvailable) notice.textContent = `↥ Обновление панели · ${status.commits?.length || 0}`;
+}
+async function loadPanelUpdate() {
+  if (!authenticated || panelUpdateLoading) return;
+  panelUpdateLoading = true;
+  try { renderPanelUpdate(await api('/api/panel-update')); } catch {} finally { panelUpdateLoading = false; }
+}
+function openPanelUpdate() {
+  if (!panelUpdate?.updateAvailable) return;
+  const dialog = $('#panel-update-dialog');
+  $('#panel-update-status').textContent = `Доступно обновление: ${panelUpdate.current?.slice(0, 7)} → ${panelUpdate.latest?.slice(0, 7)} · ветка ${panelUpdate.branch}`;
+  $('#panel-update-commits').innerHTML = (panelUpdate.commits || []).map(commit => `<article class="panel-update-commit"><strong>${escape(commit.shortId)} · ${escape(commit.subject)}</strong><small>${escape(commit.author)} · ${escape(commit.date)}</small></article>`).join('') || '<p class="muted">Описание изменений не найдено.</p>';
+  $('#panel-update-error').textContent = '';
+  $('#panel-update-confirm').disabled = false; $('#panel-update-cancel').disabled = false; dialog.classList.remove('updating');
+  dialog.showModal();
+}
+$('#panel-update-notice').onclick = openPanelUpdate;
+$('#panel-update-close').onclick = () => $('#panel-update-dialog').close();
+$('#panel-update-cancel').onclick = () => $('#panel-update-dialog').close();
+$('#panel-update-confirm').onclick = async () => {
+  const dialog = $('#panel-update-dialog'); const button = $('#panel-update-confirm');
+  button.disabled = true; $('#panel-update-cancel').disabled = true; $('#panel-update-error').textContent = ''; $('#panel-update-status').textContent = 'Обновляем панель и устанавливаем зависимости…'; dialog.classList.add('updating');
+  try {
+    const result = await api('/api/panel-update', {});
+    $('#panel-update-status').textContent = result.restarting ? 'Панель обновлена. Выполняется перезапуск…' : 'Панель обновлена. Перезапустите её вручную.';
+    $('#panel-update-commits').innerHTML = '';
+    renderPanelUpdate({ updateAvailable: false });
+    setTimeout(() => { if (dialog.open) dialog.close(); }, 2500);
+  } catch (error) { $('#panel-update-error').textContent = error.message; button.disabled = false; $('#panel-update-cancel').disabled = false; dialog.classList.remove('updating'); }
+};
 function showLogin() {
   authenticated = false; connected = false; requestId++;
   $('#workspace').hidden = true; $('#login-view').hidden = false;
@@ -28,7 +62,7 @@ function showLogin() {
 }
 async function enter() {
   await loadServers(); authenticated = true; $('#login-view').hidden = true; $('#workspace').hidden = false;
-  await refresh();
+  await refresh(); await loadPanelUpdate();
 }
 function navigate(view) {
   const sections = { processes: ['process-view', 'Процессы'], servers: ['servers-view', 'Серверы'], settings: ['settings-view', 'Настройки'] };
@@ -449,6 +483,7 @@ async function refreshLogs() {
 }
 setInterval(() => { if (!authenticated || document.hidden) return; if (!$('#process-view').hidden && !loading && !busy) refresh(); if (logTarget) refreshLogs(); }, 5000);
 setInterval(() => { if (!authenticated || document.hidden || $('#process-view').hidden || busy) return; void refreshGitUpdates(); }, 30000);
+setInterval(() => { if (!authenticated || document.hidden) return; void loadPanelUpdate(); }, 300000);
 let telegramSubscriptions = [], telegramChoices = [], telegramLoaded = false;
 const subscriptionKey = s => JSON.stringify([s.serverId, s.name, s.script]);
 function telegramStatus(status) {

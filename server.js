@@ -1,10 +1,12 @@
 import http from 'node:http';
+import { execFile } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
 import { loadEnvFile } from 'node:process';
 import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
 import { createManager, createDemoManager, validateStart } from './lib/manager.js';
 import { createSettings, validateAddress } from './lib/settings.js';
 import { createSshManager, probeHost } from './lib/ssh.js';
@@ -13,6 +15,8 @@ import { createTelegram } from './lib/telegram.js';
 import { analyzeGroq, redact } from './lib/ai.js';
 import { transferSshApplication } from './lib/transfer.js';
 
+const execFileAsync = promisify(execFile);
+const panelRoot = path.dirname(fileURLToPath(import.meta.url));
 const digest = value => createHash('sha256').update(value).digest();
 async function githubJson(url, options = {}) {
   let response;
@@ -22,6 +26,25 @@ async function githubJson(url, options = {}) {
   if (!response.ok) throw new Error('GitHub отклонил запрос авторизации. Проверьте Client ID и настройки Device Flow.');
   return result;
 }
+async function panelGitStatus() {
+  const run = (args, options = {}) => execFileAsync(process.platform === 'win32' ? 'git.exe' : 'git', ['-C', panelRoot, ...args], { maxBuffer: 4 * 1024 * 1024, ...options });
+  try {
+    const branch = (await run(['branch', '--show-current'])).stdout.trim() || 'main';
+    const current = (await run(['rev-parse', 'HEAD'])).stdout.trim();
+    await run(['fetch', '--quiet', 'origin', branch], { timeout: 120000 });
+    let latest = '';
+    try { latest = (await run(['rev-parse', `origin/${branch}`])).stdout.trim(); } catch {}
+    if (!latest) latest = (await run(['rev-parse', 'origin/HEAD'])).stdout.trim();
+    const commits = latest && latest !== current
+      ? (await run(['log', '--format=%H%x09%h%x09%s%x09%an%x09%ad', '--date=short', `${current}..${latest}`, '-n', '30'])).stdout.trim().split(/\r?\n/).filter(Boolean).map(line => {
+        const [id, shortId, subject, author, date] = line.split('\t');
+        return { id, shortId, subject, author, date };
+      }) : [];
+    return { available: true, updateAvailable: Boolean(latest && latest !== current), branch, current, latest, commits };
+  } catch (error) {
+    return { available: false, updateAvailable: null, error: `Не удалось проверить обновление панели: ${error.message}` };
+  }
+}
 export function createServer({ resolveManager, settings, password, telegram, demo = false, secure = false, sessions = memorySessions() }) {
   const attempts = new Map();
   let autoUpdateRunning = false;
@@ -29,7 +52,7 @@ export function createServer({ resolveManager, settings, password, telegram, dem
     if (autoUpdateRunning) return;
     autoUpdateRunning = true;
     try {
-      const token = settings.github(true).token;
+      const token = typeof settings.github === 'function' ? settings.github(true).token : '';
       for (const summary of settings.list()) {
         const enabled = settings.gitAutoUpdates(summary.id);
         const ids = Object.entries(enabled).filter(([, value]) => value).map(([id]) => Number(id)).filter(Number.isSafeInteger);
@@ -94,6 +117,29 @@ export function createServer({ resolveManager, settings, password, telegram, dem
         await sessions.revoke(token); res.setHeader('Set-Cookie', cookie('', 0)); return send(200, { ok: true });
       }
       res.setHeader('Set-Cookie', cookie(token, COOKIE_MAX_AGE));
+      if (req.method === 'GET' && url.pathname === '/api/panel-update') return send(200, await panelGitStatus());
+      if (req.method === 'POST' && url.pathname === '/api/panel-update') {
+        const status = await panelGitStatus();
+        if (!status.available) throw new Error(status.error);
+        if (!status.updateAvailable) return send(200, { ok: true, updated: false, status });
+        const dirty = (await execFileAsync(process.platform === 'win32' ? 'git.exe' : 'git', ['-C', panelRoot, 'status', '--porcelain'], { maxBuffer: 1024 * 1024 })).stdout.trim();
+        if (dirty) throw new Error('В папке панели есть незакоммиченные изменения. Сначала сохраните или отмените их.');
+        const git = process.platform === 'win32' ? 'git.exe' : 'git';
+        await execFileAsync(git, ['-C', panelRoot, 'pull', '--ff-only', 'origin', status.branch], { timeout: 120000, maxBuffer: 4 * 1024 * 1024 });
+        try { await readFile(path.join(panelRoot, 'package-lock.json')); } catch { throw new Error('После обновления не найден package-lock.json панели.'); }
+        const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+        await execFileAsync(npm, ['ci', '--omit=dev'], { cwd: panelRoot, timeout: 600000, maxBuffer: 4 * 1024 * 1024 });
+        const local = settings.list().find(item => item.type === 'local') || settings.get('local');
+        let panelProcess;
+        try { panelProcess = (await (await resolveManager(local)).list()).find(item => path.resolve(item.script || '') === path.resolve(path.join(panelRoot, 'server.js'))); } catch {}
+        if (panelProcess) {
+          setTimeout(async () => {
+            try { await (await resolveManager(local)).action(panelProcess.id, 'restart'); }
+            catch (error) { console.error(`PM2M: panel restart after update failed: ${error.message}`); }
+          }, 1000).unref();
+        }
+        return send(200, { ok: true, updated: true, restarting: Boolean(panelProcess), status: await panelGitStatus() });
+      }
       if (req.method === 'GET' && url.pathname === '/api/github') return send(200, { config: { hasToken: settings.github().hasToken } });
       if (req.method === 'POST' && url.pathname === '/api/github/token') {
         const githubToken = String(body.token || '').trim();
