@@ -6,10 +6,10 @@ let authenticated = false, connected = false, requestId = 0, busy = false, loadi
 let logTarget = null, logStream = 'stdout', logData = {}, logLoading = false, toastTimer;
 let processTarget = null, processEditId = null, editInterpreter = '', versionsRequest = 0, versionsLoading = false, autoAppPath = '', autoScriptPath = '';
 
-async function api(path, body) {
+async function api(path, body, timeout = 45000) {
   const response = await fetch(path, { method: body === undefined ? 'GET' : 'POST',
     headers: body === undefined ? {} : { 'Content-Type': 'application/json', 'X-PM2M-Request': '1' },
-    body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(45000) });
+    body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(timeout) });
   const data = await response.json();
   if (response.status === 401 && path !== '/api/login') showLogin();
   if (response.status === 202) return data;
@@ -403,7 +403,7 @@ $('#process-form').onsubmit = event => {
   const target = processTarget;
   return submitForm(event, async data => {
     $('#reload-node-versions').disabled = true;
-    try { await api(endpoint(processEditId ? `/api/processes/${processEditId}/edit` : '/api/processes', target), data); toast(processEditId ? 'Параметры приложения сохранены' : 'Приложение запущено'); await refresh(); }
+    try { await api(endpoint(processEditId ? `/api/processes/${processEditId}/edit` : '/api/processes', target), data, data.repository ? 10 * 60 * 1000 : 45000); toast(processEditId ? 'Параметры приложения сохранены' : 'Приложение запущено'); await refresh(); }
     finally { $('#reload-node-versions').disabled = false; }
   });
 };
