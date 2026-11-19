@@ -1,6 +1,6 @@
 import http from 'node:http';
 import { execFile } from 'node:child_process';
-import { readFile } from 'node:fs/promises';
+import { access, readFile, readdir } from 'node:fs/promises';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
@@ -44,6 +44,21 @@ async function panelGitStatus() {
   } catch (error) {
     return { available: false, updateAvailable: null, error: `Не удалось проверить обновление панели: ${error.message}` };
   }
+}
+async function panelNpmExecutable() {
+  const names = process.platform === 'win32' ? ['npm.cmd'] : ['npm'];
+  const directories = [path.dirname(process.execPath)];
+  if (process.platform !== 'win32') {
+    try {
+      const entries = await readdir('/root/.nvm/versions/node', { withFileTypes: true });
+      directories.push(...entries.filter(entry => entry.isDirectory() && /^v(?:2[2-9]|[3-9]\d)\./.test(entry.name)).sort((a, b) => b.name.localeCompare(a.name, undefined, { numeric: true })).map(entry => path.join('/root/.nvm/versions/node', entry.name, 'bin')));
+    } catch {}
+  }
+  for (const directory of directories) for (const name of names) {
+    const candidate = path.join(directory, name);
+    try { await access(candidate); return candidate; } catch {}
+  }
+  return names[0];
 }
 export function createServer({ resolveManager, settings, password, telegram, demo = false, secure = false, sessions = memorySessions() }) {
   const attempts = new Map();
@@ -127,8 +142,7 @@ export function createServer({ resolveManager, settings, password, telegram, dem
         const git = process.platform === 'win32' ? 'git.exe' : 'git';
         await execFileAsync(git, ['-C', panelRoot, 'pull', '--ff-only', 'origin', status.branch], { timeout: 120000, maxBuffer: 4 * 1024 * 1024 });
         try { await readFile(path.join(panelRoot, 'package-lock.json')); } catch { throw new Error('После обновления не найден package-lock.json панели.'); }
-        const bundledNpm = path.join(path.dirname(process.execPath), process.platform === 'win32' ? 'npm.cmd' : 'npm');
-        const npm = process.platform === 'win32' ? (await readFile(bundledNpm).then(() => bundledNpm).catch(() => 'npm.cmd')) : (await readFile(bundledNpm).then(() => bundledNpm).catch(() => 'npm'));
+        const npm = await panelNpmExecutable();
         await execFileAsync(npm, ['ci', '--omit=dev'], { cwd: panelRoot, timeout: 600000, maxBuffer: 4 * 1024 * 1024 });
         const local = settings.list().find(item => item.type === 'local') || settings.get('local');
         let panelProcess;
