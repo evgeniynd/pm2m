@@ -411,6 +411,8 @@ async function detectGithubBranches() {
   } catch (error) { if (request === branchRequest) { branch.innerHTML = '<option value="">Не удалось получить ветки</option>'; status.textContent = error.message; } }
 }
 const repositoryInput = $('#process-form').elements.repository;
+const branchSelect = $('#github-branch-select');
+branchSelect.addEventListener('focus', () => { if (!branchSelect.disabled && branchSelect.options.length > 1 && typeof branchSelect.showPicker === 'function') { try { branchSelect.showPicker(); } catch {} } });
 repositoryInput.addEventListener('input', () => { clearTimeout(branchTimer); branchTimer = setTimeout(() => void detectGithubBranches(), 500); });
 repositoryInput.addEventListener('blur', () => { clearTimeout(branchTimer); void detectGithubBranches(); });
 async function submitForm(event, work) {
