@@ -386,7 +386,7 @@ async function loadNodeVersions() {
   }
 }
 $('#add-process').onclick = () => {
-  processTarget = selected; processEditId = null; editInterpreter = ''; autoAppPath = ''; autoScriptPath = ''; branchRequest++; $('#process-form').reset(); $('#github-branches').innerHTML = ''; $('#github-branch-status').textContent = 'Укажите URL GitHub-репозитория — ветка определится автоматически.'; $('#process-form .error').textContent = ''; $('#process-dialog-title').textContent = 'Новое приложение'; $('#start-process').textContent = 'Запустить приложение'; $('.github-source').hidden = false;
+  processTarget = selected; processEditId = null; editInterpreter = ''; autoAppPath = ''; autoScriptPath = ''; branchRequest++; $('#process-form').reset(); $('#github-branch-select').innerHTML = '<option value="">Укажите URL репозитория</option>'; $('#github-branch-select').disabled = true; $('#github-branch-status').textContent = 'Укажите URL GitHub-репозитория — ветка определится автоматически.'; $('#process-form .error').textContent = ''; $('#process-dialog-title').textContent = 'Новое приложение'; $('#start-process').textContent = 'Запустить приложение'; $('.github-source').hidden = false;
   $('#process-target').textContent = `Сервер: ${servers.find(s => s.id === processTarget)?.name}. Все пути относятся к этому серверу.`;
   $('#process-dialog').showModal(); loadNodeVersions();
 };
@@ -395,19 +395,20 @@ $('#process-dialog').addEventListener('close', () => { processTarget = null; pro
 function formData(form) { return Object.fromEntries(new FormData(form)); }
 async function detectGithubBranches() {
   const form = $('#process-form'); const repository = form.elements.repository.value.trim(); const branch = form.elements.branch; const status = $('#github-branch-status'); const request = ++branchRequest;
-  $('#github-branches').innerHTML = '';
-  if (!repository) { status.textContent = 'Укажите URL GitHub-репозитория — ветка определится автоматически.'; return; }
-  if (!/^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:\.git)?\/?$/.test(repository)) { status.textContent = 'Введите корректный HTTPS URL GitHub-репозитория.'; return; }
+    branch.innerHTML = '<option value="">Получаем список веток…</option>'; branch.disabled = true;
+    if (!repository) { branch.innerHTML = '<option value="">Укажите URL репозитория</option>'; status.textContent = 'Укажите URL GitHub-репозитория — ветка определится автоматически.'; return; }
+  if (!/^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:\.git)?\/?$/.test(repository)) { branch.innerHTML = '<option value="">Некорректный URL репозитория</option>'; status.textContent = 'Введите корректный HTTPS URL GitHub-репозитория.'; return; }
   status.textContent = 'Получаем список веток…';
   try {
     const data = await api(`/api/github/branches?repository=${encodeURIComponent(repository)}`);
     if (request !== branchRequest) return;
     const branches = Array.isArray(data.branches) ? data.branches : [];
-    $('#github-branches').innerHTML = branches.map(item => `<option value="${escape(item)}"></option>`).join('');
-    if (branches.length === 1) { branch.value = branches[0]; status.textContent = `Ветка определена автоматически: ${branches[0]}`; }
-    else if (branches.length > 1) { if (!branches.includes(branch.value)) branch.value = branches.includes('main') ? 'main' : branches[0]; status.textContent = `Найдено веток: ${branches.length}. Выберите ветку из списка.`; }
-    else status.textContent = 'Ветки не найдены.';
-  } catch (error) { if (request === branchRequest) status.textContent = error.message; }
+      branch.innerHTML = branches.length ? branches.map(item => `<option value="${escape(item)}">${escape(item)}</option>`).join('') : '<option value="">Ветки не найдены</option>';
+      branch.disabled = !branches.length;
+      if (branches.length === 1) { branch.value = branches[0]; status.textContent = `Ветка определена автоматически: ${branches[0]}`; }
+      else if (branches.length > 1) { branch.value = branches.includes('main') ? 'main' : branches[0]; status.textContent = `Найдено веток: ${branches.length}. Выберите ветку из списка.`; }
+      else status.textContent = 'Ветки не найдены.';
+  } catch (error) { if (request === branchRequest) { branch.innerHTML = '<option value="">Не удалось получить ветки</option>'; status.textContent = error.message; } }
 }
 const repositoryInput = $('#process-form').elements.repository;
 repositoryInput.addEventListener('input', () => { clearTimeout(branchTimer); branchTimer = setTimeout(() => void detectGithubBranches(), 500); });
