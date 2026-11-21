@@ -4,7 +4,7 @@ let servers = [], processes = [], selected = localStorage.getItem('pm2m-server')
 const gitStatusCache = new Map();
 let authenticated = false, connected = false, requestId = 0, busy = false, loading = false, gitLoading = false, gitLoadingTarget = null, gitInitialLoading = false, gitReady = false, panelUpdate = null, panelUpdateLoading = false;
 let logTarget = null, logStream = 'stdout', logData = {}, logLoading = false, toastTimer;
-let processTarget = null, processEditId = null, editInterpreter = '', versionsRequest = 0, versionsLoading = false, autoAppPath = '', autoScriptPath = '';
+let processTarget = null, processEditId = null, editInterpreter = '', versionsRequest = 0, versionsLoading = false, branchRequest = 0, branchTimer = null, autoAppPath = '', autoScriptPath = '';
 
 async function api(path, body, timeout = 45000) {
   const response = await fetch(path, { method: body === undefined ? 'GET' : 'POST',
@@ -386,13 +386,32 @@ async function loadNodeVersions() {
   }
 }
 $('#add-process').onclick = () => {
-  processTarget = selected; processEditId = null; editInterpreter = ''; autoAppPath = ''; autoScriptPath = ''; $('#process-form').reset(); $('#process-form .error').textContent = ''; $('#process-dialog-title').textContent = 'Новое приложение'; $('#start-process').textContent = 'Запустить приложение'; $('.github-source').hidden = false;
+  processTarget = selected; processEditId = null; editInterpreter = ''; autoAppPath = ''; autoScriptPath = ''; branchRequest++; $('#process-form').reset(); $('#github-branches').innerHTML = ''; $('#github-branch-status').textContent = 'Укажите URL GitHub-репозитория — ветка определится автоматически.'; $('#process-form .error').textContent = ''; $('#process-dialog-title').textContent = 'Новое приложение'; $('#start-process').textContent = 'Запустить приложение'; $('.github-source').hidden = false;
   $('#process-target').textContent = `Сервер: ${servers.find(s => s.id === processTarget)?.name}. Все пути относятся к этому серверу.`;
   $('#process-dialog').showModal(); loadNodeVersions();
 };
 $('#reload-node-versions').onclick = loadNodeVersions;
-$('#process-dialog').addEventListener('close', () => { processTarget = null; processEditId = null; editInterpreter = ''; versionsRequest++; $('.github-source').hidden = false; });
+$('#process-dialog').addEventListener('close', () => { processTarget = null; processEditId = null; editInterpreter = ''; versionsRequest++; branchRequest++; $('.github-source').hidden = false; });
 function formData(form) { return Object.fromEntries(new FormData(form)); }
+async function detectGithubBranches() {
+  const form = $('#process-form'); const repository = form.elements.repository.value.trim(); const branch = form.elements.branch; const status = $('#github-branch-status'); const request = ++branchRequest;
+  $('#github-branches').innerHTML = '';
+  if (!repository) { status.textContent = 'Укажите URL GitHub-репозитория — ветка определится автоматически.'; return; }
+  if (!/^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:\.git)?\/?$/.test(repository)) { status.textContent = 'Введите корректный HTTPS URL GitHub-репозитория.'; return; }
+  status.textContent = 'Получаем список веток…';
+  try {
+    const data = await api(`/api/github/branches?repository=${encodeURIComponent(repository)}`);
+    if (request !== branchRequest) return;
+    const branches = Array.isArray(data.branches) ? data.branches : [];
+    $('#github-branches').innerHTML = branches.map(item => `<option value="${escape(item)}"></option>`).join('');
+    if (branches.length === 1) { branch.value = branches[0]; status.textContent = `Ветка определена автоматически: ${branches[0]}`; }
+    else if (branches.length > 1) { if (!branches.includes(branch.value)) branch.value = branches.includes('main') ? 'main' : branches[0]; status.textContent = `Найдено веток: ${branches.length}. Выберите ветку из списка.`; }
+    else status.textContent = 'Ветки не найдены.';
+  } catch (error) { if (request === branchRequest) status.textContent = error.message; }
+}
+const repositoryInput = $('#process-form').elements.repository;
+repositoryInput.addEventListener('input', () => { clearTimeout(branchTimer); branchTimer = setTimeout(() => void detectGithubBranches(), 500); });
+repositoryInput.addEventListener('blur', () => { clearTimeout(branchTimer); void detectGithubBranches(); });
 async function submitForm(event, work) {
   event.preventDefault(); const form = event.target; const button = event.submitter; button.disabled = true; form.querySelector('.error').textContent = '';
   try { await work(formData(form)); form.closest('dialog').close(); form.reset(); } catch (error) { form.querySelector('.error').textContent = error.message; }

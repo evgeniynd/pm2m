@@ -132,6 +132,16 @@ export function createServer({ resolveManager, settings, password, telegram, dem
         await sessions.revoke(token); res.setHeader('Set-Cookie', cookie('', 0)); return send(200, { ok: true });
       }
       res.setHeader('Set-Cookie', cookie(token, COOKIE_MAX_AGE));
+      if (req.method === 'GET' && url.pathname === '/api/github/branches') {
+        const repository = String(url.searchParams.get('repository') || '').trim();
+        const match = /^https:\/\/github\.com\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+?)(?:\.git)?\/?$/.exec(repository);
+        if (!match) throw new Error('Укажите HTTPS URL репозитория GitHub');
+        const headers = { 'User-Agent': 'PM2M' };
+        const githubToken = settings.github(true).token;
+        if (githubToken) headers.Authorization = `Bearer ${githubToken}`;
+        const branches = await githubJson(`https://api.github.com/repos/${match[1]}/${match[2]}/branches?per_page=100`, { headers });
+        return send(200, { branches: Array.isArray(branches) ? branches.map(item => item.name).filter(Boolean) : [] });
+      }
       if (req.method === 'GET' && url.pathname === '/api/panel-update') return send(200, await panelGitStatus());
       if (req.method === 'POST' && url.pathname === '/api/panel-update') {
         const status = await panelGitStatus();
