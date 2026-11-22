@@ -56,9 +56,21 @@ async function panelNpmExecutable() {
   }
   for (const directory of directories) for (const name of names) {
     const candidate = path.join(directory, name);
-    try { await access(candidate); return candidate; } catch {}
+    try {
+      await access(candidate);
+      if (process.platform !== 'win32') {
+        const node = path.join(directory, 'node');
+        const npmCli = path.join(directory, '..', 'lib', 'node_modules', 'npm', 'bin', 'npm-cli.js');
+        try {
+          await execFileAsync(node, ['-e', "require('node:path')"], { timeout: 10000 });
+          await access(npmCli);
+          return { file: node, args: [npmCli] };
+        } catch {}
+      }
+      return { file: candidate, args: [] };
+    } catch {}
   }
-  return names[0];
+  return { file: names[0], args: [] };
 }
 export function createServer({ resolveManager, settings, password, telegram, demo = false, secure = false, sessions = memorySessions() }) {
   const attempts = new Map();
@@ -153,7 +165,7 @@ export function createServer({ resolveManager, settings, password, telegram, dem
         await execFileAsync(git, ['-C', panelRoot, 'pull', '--ff-only', 'origin', status.branch], { timeout: 120000, maxBuffer: 4 * 1024 * 1024 });
         try { await readFile(path.join(panelRoot, 'package-lock.json')); } catch { throw new Error('После обновления не найден package-lock.json панели.'); }
         const npm = await panelNpmExecutable();
-        await execFileAsync(npm, ['ci', '--omit=dev'], { cwd: panelRoot, timeout: 600000, maxBuffer: 4 * 1024 * 1024 });
+        await execFileAsync(npm.file, [...npm.args, 'ci', '--omit=dev'], { cwd: panelRoot, timeout: 600000, maxBuffer: 4 * 1024 * 1024 });
         const local = settings.list().find(item => item.type === 'local') || settings.get('local');
         let panelProcess;
         try { panelProcess = (await (await resolveManager(local)).list()).find(item => path.resolve(item.script || '') === path.resolve(path.join(panelRoot, 'server.js'))); } catch {}
